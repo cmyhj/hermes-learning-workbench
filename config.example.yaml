@@ -1,0 +1,81 @@
+# wb-learn 配置示例（本文件本身是合法 YAML，便于校验；但它不会被 Hermes 直接读取）
+#
+# 真正生效的三处：
+#   1) $HERMES_HOME/config.yaml 里的 plugins.enabled      —— 启用插件（必须）
+#   2) 启动 dashboard 那个进程的环境变量                    —— 学习材料的根目录（可选）
+#   3) $HERMES_HOME/plugin-data/wb-learn/*.json           —— 映射与链接登记（由 UI 写入）
+
+# ---------------------------------------------------------------------------
+# 1) plugins —— 复制到 config.yaml 的这一节（唯一正确方式）
+# ---------------------------------------------------------------------------
+# 用命令写，不要手改 YAML：setter 会整体替换数组，先读后写，别丢已有条目。
+#
+#   hermes config get plugins.enabled
+#   hermes config set plugins.enabled '["disk-cleanup","web-search-plus","wb-project","wb-learn"]'
+#
+# 注意：hermes plugins enable <name> 对 dashboard 插件无效（只认 agent 插件）。
+plugins:
+  enabled:
+    - disk-cleanup
+    - web-search-plus
+    - wb-project      # 姊妹插件：项目甘特图 + Zotero 论文（不需要可删）
+    - wb-learn        # 本插件
+  disabled: []
+
+# ---------------------------------------------------------------------------
+# 2) env —— 设在「启动 dashboard 的进程」里，不是写在 config.yaml
+# ---------------------------------------------------------------------------
+# 四个根全部有默认值，不设也能跑。优先级：环境变量 > 内置默认值。
+env:
+  # 课程材料根：下一层子目录 = 一门课
+  WB_LEARN_COURSES_ROOT: "E:/Libraries/Courses"
+  # Obsidian 课程笔记根：下一层子目录 = 一门课的笔记目录
+  # 默认是 <COURSES_ROOT>/vault/01-Courses；单独设它可以把笔记放在别处
+  WB_LEARN_VAULT_ROOT: "E:/Libraries/Courses/vault/01-Courses"
+  # 自主学习根：下一层子目录 = 一个主题
+  WB_LEARN_STUDY_ROOT: "E:/Study"
+  # 插件数据目录（映射 / 链接登记 / 草稿）。默认 $HERMES_HOME/plugin-data/wb-learn
+  WB_LEARN_DATA_DIR: "C:/tmp/wb-learn-test-data"
+  # Zotero 本地 API（只读）。端口不同才需要改。
+  WB_LEARN_ZOTERO_BASE: "http://127.0.0.1:23119/api/users/0"
+
+# ---------------------------------------------------------------------------
+# 3) plugin-data/wb-learn/ —— 由 UI 写入，这里只为说明形状
+# ---------------------------------------------------------------------------
+# learn-mapping.json（对象 → Obsidian 笔记目录）
+#   kind: exact（目录名精确同名，自动）| manual（你选的）| none（你选了「不关联」）
+mapping_shape_example:
+  "course:机器视觉":
+    vault: "机器视觉"
+    kind: manual
+    updated_at: "2026-11-21T12:00:00"
+  "course:C++":
+    vault: null
+    kind: none
+    updated_at: "2026-11-21T12:01:00"
+
+# links.json（对象 → 只读外链登记）
+#   github 只接受 github.com/<owner>/<repo>；zotero 只接受 8 位大写 key
+links_shape_example:
+  "study:diffusion_policy":
+    github:
+      repo: "real-stanford/diffusion_policy"
+      source: manual
+    zotero:
+      collection: "ABCD1234"
+    updated_at: "2026-11-21T12:02:00"
+
+# ---------------------------------------------------------------------------
+# 4) optional_deps —— 只影响「资料文本预览」，不影响做题 / 题库 / 对话
+# ---------------------------------------------------------------------------
+# 必须装进「启动 dashboard 的那个解释器」（Hermes 可能用自带 python-3.x 运行时，
+# 而不是 venv）。装完看 GET /api/plugins/wb-learn/health 的 capabilities 是否变 true。
+# 不装也好用：PDF/docx/pptx/xlsx 只列清单，预览时明确提示「未安装，不提供预览」。
+# 实现不会自动安装任何依赖。
+optional_deps:
+  install_with: "pip install pymupdf python-docx python-pptx openpyxl"
+  affects:
+    - pdf_preview
+    - docx_preview
+    - pptx_preview
+    - xlsx_preview

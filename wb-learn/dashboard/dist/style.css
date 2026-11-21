@@ -1,0 +1,983 @@
+/*
+ * wb-learn — 学习区样式。
+ *
+ * 颜色/背景全部走 Dashboard 主题变量（--color-*），明暗主题自动跟随；
+ * 硬编码只有「答对/答错」两种语义色。
+ * 作用域：所有选择器挂在 .wbl-root 下（对话面板自己的 .wbc-* 在共享组件里）。
+ */
+
+.wbl-root {
+  display: grid;
+  grid-template-columns: 264px minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+  padding: 16px 4px 32px;
+  color: var(--color-foreground);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.wbl-root-chat {
+  grid-template-columns: 264px minmax(0, 1fr) minmax(320px, 384px);
+}
+
+/* ---------------------------------------------------------------- 左栏 */
+.wbl-side {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md, 8px);
+  background: var(--color-card);
+  padding: 10px 10px 12px;
+  position: sticky;
+  top: 12px;
+  max-height: calc(100vh - 96px);
+  overflow-y: auto;
+}
+
+.wbl-side-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 2px 4px 8px;
+  border-bottom: 1px solid var(--color-border);
+  margin-bottom: 6px;
+}
+
+.wbl-side-title {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-muted-foreground);
+}
+
+.wbl-side-count {
+  font-size: 11px;
+  color: var(--color-muted-foreground);
+  font-variant-numeric: tabular-nums;
+}
+
+.wbl-sublist {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.wbl-subitem {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 5px 7px;
+  border-radius: var(--radius-sm, 6px);
+  cursor: pointer;
+  border-left: 2px solid transparent;
+}
+
+.wbl-subitem:hover {
+  background: var(--color-muted, rgba(127, 127, 127, 0.12));
+}
+
+.wbl-subitem-active {
+  background: var(--color-muted, rgba(127, 127, 127, 0.18));
+  border-left-color: var(--color-primary, #2f6feb);
+  font-weight: 600;
+}
+
+.wbl-subname {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wbl-subkind {
+  flex: none;
+  font-size: 10px;
+  color: var(--color-muted-foreground);
+}
+
+.wbl-sidehint {
+  margin: 4px 0 0;
+  font-size: 10.5px;
+  color: var(--color-muted-foreground);
+  line-height: 1.5;
+}
+
+/* ---------------------------------------------------------------- 主区 */
+.wbl-main {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+.wbl-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.wbl-title {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.wbl-subtitle {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--color-muted-foreground);
+}
+
+.wbl-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+
+.wbl-kinds {
+  display: inline-flex;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm, 6px);
+  overflow: hidden;
+}
+
+.wbl-kind {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  color: var(--color-muted-foreground);
+  padding: 3px 10px;
+  cursor: pointer;
+}
+
+.wbl-kind-active {
+  background: var(--color-primary, #2f6feb);
+  color: #fff;
+}
+
+/* ---------------------------------------------------------------- 题目卡 */
+.wbl-qcard {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md, 8px);
+  background: var(--color-card);
+  padding: 14px 16px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 78ch;
+}
+
+.wbl-qhead {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--color-muted-foreground);
+}
+
+.wbl-qtype {
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  padding: 0 7px;
+  font-size: 10.5px;
+}
+
+.wbl-qprog {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+
+.wbl-stem {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.65;
+  white-space: pre-wrap;
+}
+
+.wbl-opts {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.wbl-opt {
+  appearance: none;
+  text-align: left;
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+  font: inherit;
+  color: var(--color-foreground);
+  background: var(--color-background, transparent);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm, 6px);
+  padding: 7px 10px;
+  cursor: pointer;
+}
+
+.wbl-opt:hover:not(:disabled) {
+  background: var(--color-muted, rgba(127, 127, 127, 0.12));
+}
+
+.wbl-opt:disabled {
+  cursor: default;
+}
+
+.wbl-optkey {
+  flex: none;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 11px;
+  color: var(--color-muted-foreground);
+}
+
+.wbl-opttext {
+  min-width: 0;
+}
+
+.wbl-opt-picked {
+  border-color: var(--color-primary, #2f6feb);
+}
+
+.wbl-opt-right {
+  border-color: #2f8f5b;
+  background: #2f8f5b14;
+}
+
+.wbl-opt-wrong {
+  border-color: #d33f3f;
+  background: #d33f3f14;
+}
+
+.wbl-typed {
+  min-width: 0;
+}
+
+.wbl-input {
+  width: 100%;
+  font: inherit;
+  color: var(--color-foreground);
+  background: var(--color-background, transparent);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm, 6px);
+  padding: 7px 9px;
+}
+
+.wbl-qactions {
+  display: flex;
+  gap: 8px;
+}
+
+.wbl-explain {
+  border-top: 1px solid var(--color-border);
+  padding-top: 9px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.wbl-answer {
+  margin: 0;
+  font-size: 12.5px;
+}
+
+.wbl-answer strong {
+  font-weight: 600;
+}
+
+.wbl-parsed {
+  margin: 0;
+  font-size: 12px;
+  color: var(--color-muted-foreground);
+  white-space: pre-wrap;
+}
+
+.wbl-pos {
+  margin: 0;
+  font-size: 11px;
+  color: var(--color-muted-foreground);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------------------------------------------------------------- 对话栏 */
+.wbl-chatcol {
+  height: calc(100vh - 96px);
+  position: sticky;
+  top: 12px;
+}
+
+.wbl-drawer-layer {
+  position: relative;
+  z-index: 40;
+}
+
+/* ---------------------------------------------------------------- 通用 */
+.wbl-btn {
+  appearance: none;
+  font: inherit;
+  font-size: 12px;
+  padding: 4px 11px;
+  border-radius: var(--radius-sm, 6px);
+  border: 1px solid var(--color-border);
+  background: var(--color-card);
+  color: var(--color-foreground);
+  cursor: pointer;
+}
+
+.wbl-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.wbl-btn-primary {
+  background: var(--color-primary, #2f6feb);
+  border-color: var(--color-primary, #2f6feb);
+  color: #fff;
+}
+
+.wbl-btn-quiet {
+  background: transparent;
+  color: var(--color-muted-foreground);
+}
+
+.wbl-hint {
+  color: var(--color-muted-foreground);
+  font-size: 12px;
+}
+
+.wbl-err {
+  margin: 0;
+  font-size: 12px;
+  color: #d33f3f;
+}
+
+.wbl-empty {
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-md, 8px);
+  padding: 18px;
+  max-width: 70ch;
+}
+
+.wbl-empty-title {
+  margin: 0 0 4px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.wbl-empty-hint {
+  margin: 0;
+  font-size: 11.5px;
+  color: var(--color-muted-foreground);
+  line-height: 1.55;
+}
+
+/*
+ * wb-learn · 2.0 追加样式（课程/自主学习工作台）
+ *
+ * 只追加，不改动 1.0 已有的 .wbl-* 规则（旧类名仍被复用）。
+ * 主题：颜色全部走 Dashboard 主题变量，明暗主题自动跟随；
+ * 硬编码仅「对/错」两种语义色与状态标签底色（明暗下都保持可辨识）。
+ * 断点：<1180px 折成单列 + 对话改抽屉；<760px 左栏变横向滚动条。
+ */
+
+/* ---------------------------------------------------------------- 布局 */
+.wbl-root {
+  grid-template-columns: 288px minmax(0, 1fr);
+}
+
+/*
+ * 三列（对象 / 主区 / 对话）必须比 .wbl-root 更具体：
+ * 两个类选择器 (0,2,0) 才能压过上面那条 (0,1,0)，否则对话列会被挤到第二行（实测过）。
+ * 开对话时对象列收窄到 264，把宽度让给题干与对话。
+ */
+.wbl-root.wbl-root-chat {
+  grid-template-columns: 264px minmax(0, 1fr) minmax(280px, 340px);
+}
+
+.wbl-chatcol {
+  position: sticky;
+  top: 12px;
+  max-height: calc(100vh - 96px);
+  display: flex;
+  min-width: 0;
+}
+
+.wbl-tabs {
+  display: flex;
+  gap: 2px;
+  border-bottom: 1px solid var(--color-border);
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.wbl-tab {
+  appearance: none;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--color-muted-foreground);
+  padding: 7px 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.wbl-tab:hover { color: var(--color-foreground); }
+
+.wbl-tab-active {
+  color: var(--color-foreground);
+  border-bottom-color: var(--color-primary, #2f6feb);
+  font-weight: 600;
+}
+
+.wbl-search {
+  width: 100%;
+  box-sizing: border-box;
+  margin: 6px 0 8px;
+  padding: 5px 8px;
+  font: inherit;
+  font-size: 12px;
+  color: var(--color-foreground);
+  background: var(--color-background, transparent);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm, 6px);
+}
+
+/* ---------------------------------------------------------------- 对象列表 */
+.wbl-group { margin-bottom: 12px; }
+
+.wbl-group-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 0 4px 4px;
+}
+
+.wbl-group-title {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-muted-foreground);
+}
+
+.wbl-group-count {
+  font-size: 10.5px;
+  color: var(--color-muted-foreground);
+  font-variant-numeric: tabular-nums;
+}
+
+.wbl-objlist,
+.wbl-filelist,
+.wbl-reflist,
+.wbl-issues,
+.wbl-blankdetail,
+.wbl-previewlist {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.wbl-obj {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 6px 8px;
+  border-left: 2px solid transparent;
+  border-radius: var(--radius-sm, 6px);
+  cursor: pointer;
+}
+
+.wbl-obj:hover { background: var(--color-muted, rgba(127, 127, 127, 0.1)); }
+
+.wbl-obj-active {
+  background: var(--color-muted, rgba(127, 127, 127, 0.18));
+  border-left-color: var(--color-primary, #2f6feb);
+}
+
+.wbl-obj-name {
+  font-size: 12.5px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wbl-obj-meta {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+/* ---------------------------------------------------------------- 标签 */
+.wbl-tag {
+  display: inline-block;
+  font-size: 10px;
+  line-height: 1.6;
+  padding: 0 5px;
+  border-radius: 999px;
+  border: 1px solid var(--color-border);
+  color: var(--color-muted-foreground);
+  white-space: nowrap;
+}
+
+.wbl-tag-ok {
+  border-color: rgba(34, 150, 90, 0.5);
+  color: rgb(34, 150, 90);
+  background: rgba(34, 150, 90, 0.1);
+}
+
+.wbl-tag-warn {
+  border-color: rgba(200, 130, 20, 0.5);
+  color: rgb(186, 120, 16);
+  background: rgba(200, 130, 20, 0.1);
+}
+
+.wbl-tag-info {
+  border-color: rgba(47, 111, 235, 0.45);
+  color: rgb(47, 111, 235);
+  background: rgba(47, 111, 235, 0.09);
+}
+
+.wbl-tag-muted { opacity: 0.75; }
+
+/* ---------------------------------------------------------------- 题型过滤 */
+.wbl-quizmeta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.wbl-kind:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* ---------------------------------------------------------------- 题目交互 */
+.wbl-qnum { font-variant-numeric: tabular-nums; }
+.wbl-qhint { font-size: 10.5px; color: var(--color-muted-foreground); }
+.wbl-muted { opacity: 0.7; }
+
+.wbl-verdict {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 0 6px;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+}
+
+.wbl-verdict-ok { color: rgb(34, 150, 90); }
+.wbl-verdict-bad { color: rgb(200, 60, 55); }
+.wbl-verdict-manual { color: rgb(186, 120, 16); }
+
+.wbl-blanks { display: flex; flex-direction: column; gap: 6px; }
+
+.wbl-blankrow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11.5px;
+  color: var(--color-muted-foreground);
+}
+
+.wbl-blankrow .wbl-input { flex: 1 1 auto; }
+
+.wbl-textarea {
+  width: 100%;
+  box-sizing: border-box;
+  font: inherit;
+  font-size: 12.5px;
+  padding: 6px 8px;
+  resize: vertical;
+  color: var(--color-foreground);
+  background: var(--color-background, transparent);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm, 6px);
+}
+
+.wbl-blankdetail { display: flex; flex-direction: column; gap: 4px; margin: 0; }
+.wbl-blankdetail li {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 11.5px;
+  padding: 3px 6px;
+  border-radius: var(--radius-sm, 6px);
+  background: var(--color-muted, rgba(127, 127, 127, 0.08));
+}
+.wbl-blankdetail .wbl-ok { border-left: 2px solid rgb(34, 150, 90); }
+.wbl-blankdetail .wbl-bad { border-left: 2px solid rgb(200, 60, 55); }
+
+.wbl-src {
+  font-size: 10.5px;
+  color: var(--color-muted-foreground);
+  word-break: break-all;
+}
+
+/* ---------------------------------------------------------------- 题库标签页 */
+.wbl-banktabs {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.wbl-banktab {
+  appearance: none;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  align-items: flex-start;
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  padding: 5px 10px;
+  cursor: pointer;
+  color: var(--color-foreground);
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm, 6px);
+  max-width: 240px;
+}
+
+.wbl-banktab small { font-size: 10px; color: var(--color-muted-foreground); }
+
+.wbl-banktab-active {
+  border-color: var(--color-primary, #2f6feb);
+  box-shadow: inset 0 0 0 1px var(--color-primary, #2f6feb);
+}
+
+.wbl-banktab-add { border-style: dashed; color: var(--color-muted-foreground); }
+
+/* ---------------------------------------------------------------- 生成面板 */
+.wbl-gen { display: flex; flex-direction: column; gap: 12px; }
+
+.wbl-gencard {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md, 8px);
+  background: var(--color-card);
+  padding: 12px 14px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 78ch;
+}
+
+.wbl-gentitle {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.wbl-genlabel {
+  font-size: 11px;
+  color: var(--color-muted-foreground);
+}
+
+.wbl-genactions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.wbl-geninput {
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 11.5px;
+}
+
+.wbl-issues {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 11.5px;
+  padding-left: 16px;
+  list-style: disc;
+  color: rgb(200, 60, 55);
+}
+
+.wbl-issues.wbl-warn { color: rgb(186, 120, 16); }
+
+.wbl-saved {
+  font-size: 11.5px;
+  color: rgb(34, 150, 90);
+  word-break: break-all;
+}
+
+.wbl-previewlist {
+  list-style: decimal;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11.5px;
+}
+
+.wbl-previewlist li > span { margin-left: 6px; }
+
+/* ---------------------------------------------------------------- 资料 / 笔记 */
+.wbl-pane2 {
+  display: grid;
+  grid-template-columns: minmax(200px, 300px) minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+
+.wbl-pane-list {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md, 8px);
+  background: var(--color-card);
+  padding: 8px 8px 10px;
+  max-height: calc(100vh - 240px);
+  overflow-y: auto;
+}
+
+.wbl-pane-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 0 2px 6px;
+  border-bottom: 1px solid var(--color-border);
+  margin-bottom: 6px;
+  font-size: 12px;
+}
+
+.wbl-pane-body { min-width: 0; }
+
+.wbl-file {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 6px;
+  border-radius: var(--radius-sm, 6px);
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.wbl-file:hover { background: var(--color-muted, rgba(127, 127, 127, 0.1)); }
+.wbl-file-dir { font-weight: 600; }
+
+.wbl-filename {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wbl-filemeta {
+  flex: none;
+  font-size: 10px;
+  color: var(--color-muted-foreground);
+}
+
+.wbl-preview {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md, 8px);
+  background: var(--color-card);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.wbl-preview-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 12px;
+}
+
+.wbl-text {
+  margin: 0;
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 11.5px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 62vh;
+  overflow: auto;
+  padding: 8px;
+  border-radius: var(--radius-sm, 6px);
+  background: var(--color-muted, rgba(127, 127, 127, 0.07));
+}
+
+.wbl-notecard {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md, 8px);
+  background: var(--color-card);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 78ch;
+}
+
+.wbl-notecard-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.wbl-notepick {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 11.5px;
+  color: var(--color-muted-foreground);
+}
+
+.wbl-select {
+  font: inherit;
+  font-size: 12px;
+  padding: 4px 6px;
+  max-width: 320px;
+  color: var(--color-foreground);
+  background: var(--color-background, transparent);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm, 6px);
+}
+
+.wbl-path {
+  margin: 0;
+  font-size: 10.5px;
+  color: var(--color-muted-foreground);
+  word-break: break-all;
+}
+
+.wbl-notes { display: flex; flex-direction: column; gap: 12px; }
+
+.wbl-link2 {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 11px;
+  color: var(--color-primary, #2f6feb);
+  cursor: pointer;
+  padding: 0;
+}
+
+/* ---------------------------------------------------------------- 关联面板 */
+.wbl-links { display: flex; flex-direction: column; gap: 12px; }
+
+.wbl-linkcard {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md, 8px);
+  background: var(--color-card);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 84ch;
+}
+
+.wbl-linkhead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 12.5px;
+}
+
+.wbl-linkrow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.wbl-linkrow .wbl-input { flex: 1 1 240px; }
+
+.wbl-linkbody {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 8px;
+  border-top: 1px solid var(--color-border);
+  font-size: 11.5px;
+}
+
+.wbl-linkbody a { color: var(--color-primary, #2f6feb); }
+
+.wbl-reflist {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.wbl-reflist li {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 3px 0;
+  border-bottom: 1px dashed var(--color-border);
+}
+
+.wbl-refname { flex: 1 1 220px; min-width: 0; }
+
+.wbl-notice {
+  margin: 0;
+  font-size: 11.5px;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm, 6px);
+  color: rgb(34, 150, 90);
+  background: rgba(34, 150, 90, 0.1);
+  border: 1px solid rgba(34, 150, 90, 0.35);
+}
+
+/* ---------------------------------------------------------------- 响应式（唯一定义处）
+ *
+ * 全部断点集中在这里，且放在文件最后：@media 不提高优先级，散布在中间会被后面的
+ * 基础规则盖掉（实测过：375px 下三列规则赢，main 宽度被压成 0）。
+ *
+ * 断点按**插件容器**宽度设计（JS 用 ResizeObserver 量 .wbl-root）：
+ *   ≥1100 三列（对象 264 / 主区 / 对话 300-368）
+ *   760-1100 两列 + 对话改抽屉
+ *   <760 单列堆叠
+ */
+@media (max-width: 1180px) {
+  .wbl-root,
+  .wbl-root.wbl-root-chat { grid-template-columns: 240px minmax(0, 1fr); }
+  .wbl-chatcol { display: none; }
+  .wbl-pane2 { grid-template-columns: minmax(0, 1fr); }
+  .wbl-pane-list { max-height: 40vh; }
+}
+
+@media (max-width: 860px) {
+  .wbl-root,
+  .wbl-root.wbl-root-chat {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 14px;
+  }
+  .wbl-side {
+    position: static;
+    max-height: 34vh;
+    overflow-y: auto;
+  }
+  .wbl-chatcol { display: none; }
+  .wbl-head { flex-direction: column; align-items: stretch; }
+  .wbl-kinds { align-self: flex-start; }
+  .wbl-qcard, .wbl-gencard, .wbl-notecard, .wbl-linkcard { max-width: none; }
+}
+
+@media (max-width: 760px) {
+  .wbl-root { padding: 10px 0 24px; }
+  .wbl-linkrow .wbl-input { flex: 1 1 100%; }
+  .wbl-select { max-width: 100%; }
+  .wbl-text { max-height: 50vh; }
+}

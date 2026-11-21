@@ -1,0 +1,47 @@
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# ---- 运行时数据：绝不入库 ----
+# 题库与草稿可能含你的真实资料；映射/链接登记含本机路径与仓库名
+quiz-library/
+drafts/
+learn-mapping.json
+links.json
+project-roots.json
+plugin-data/
+
+# ---- 凭据与本地状态 ----
+.env
+.env.*
+*.token
+auth.txt
+cookies.txt
+*.sqlite
+*.sqlite3
+
+# ---- 本地清理/备份 ----
+*.bak
+*.bak.*
+*.tmp
+.tmp-*
+*.log
+.scratch-data/
+.scratch-test/
+.scratch-backup/
+
+# ---- 编辑器 / 系统 ----
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ---- node（仅测试用，无构建产物）----
+node_modules/

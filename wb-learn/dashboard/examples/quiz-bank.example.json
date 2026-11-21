@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "name": "示例 · 相机标定（3 题）",
+  "object_id": "course:机器视觉",
+  "generated": {
+    "by": "hermes-agent",
+    "at": "2026-11-21T12:00:00",
+    "model": null
+  },
+  "questions": [
+    {
+      "id": "q-0001",
+      "type": "single",
+      "stem": "张正友标定法利用平面标定板的主要前提假设是什么？",
+      "options": [
+        { "key": "A", "text": "标定板平面满足 Z=0" },
+        { "key": "B", "text": "相机无畸变" },
+        { "key": "C", "text": "光照恒定" },
+        { "key": "D", "text": "标定板必须垂直于光轴" }
+      ],
+      "answer": ["A"],
+      "explanation": "平面标定板把世界坐标系的 Z 固定为 0，从而把投影关系化成一个单应矩阵问题。",
+      "source": { "path": "2026-10_机器视觉实验/实验1/相机标定及矩阵参数求解.pdf", "locator": "p.1 教学目标" },
+      "points": 1,
+      "tags": ["相机标定"]
+    },
+    {
+      "id": "q-0002",
+      "type": "multiple",
+      "stem": "相机标定要求解的参数包括哪些？",
+      "options": [
+        { "key": "A", "text": "内参矩阵 K" },
+        { "key": "B", "text": "畸变系数" },
+        { "key": "C", "text": "外参（旋转与平移）" },
+        { "key": "D", "text": "曝光时间" }
+      ],
+      "answer": ["A", "B", "C"],
+      "explanation": "标定给出内参、畸变系数与每幅图像对应的外参；曝光时间是拍摄参数，不由标定求解。",
+      "source": { "path": "2026-10_机器视觉实验/实验1/相机标定及矩阵参数求解.pdf", "locator": "p.2 知识目标" },
+      "points": 2,
+      "tags": ["相机标定"]
+    },
+    {
+      "id": "q-0003",
+      "type": "judge",
+      "stem": "机器视觉中的「测量和判断」与计算机视觉的「分类、识别」侧重完全相同。",
+      "answer": ["错误"],
+      "explanation": "课程强调两者的侧重差异：CV 偏「质」的分析，MV 偏「量」的分析。",
+      "source": { "path": "2026-10_机器视觉实验/机器视觉课程复习题库.txt", "locator": "第1章 单选题 第2题" },
+      "points": 1,
+      "tags": ["概念"]
+    }
+  ]
+}

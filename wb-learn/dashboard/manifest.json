@@ -1,0 +1,15 @@
+{
+  "name": "wb-learn",
+  "label": "学习",
+  "description": "课程 / 自主学习工作台：材料与笔记、题库刷题与生成、只读 Zotero/GitHub 关联、每对象独立 agent 会话",
+  "icon": "Box",
+  "version": "2.0.0",
+  "tab": {
+    "path": "/learn",
+    "position": "after:projects"
+  },
+  "entry": "dist/index.js",
+  "css": "dist/style.css",
+  "has_api": true,
+  "api": "plugin_api.py"
+}
