@@ -25,7 +25,16 @@
 | GET | ``/links`` | 对象 → Zotero collection / GitHub repo（只读） |
 | PUT | ``/links`` | **写**：外链登记（github.com/<owner>/<repo> 与 8 位 key） |
 | GET | ``/zotero/collections`` | Zotero collections（只读，离线如实报错） |
+| GET | ``/zotero/collection`` | Zotero collection 条目元数据（只读） |
 | GET | ``/github/repo`` | 仓库只读元数据（``?repo=owner/name``） |
+| GET | ``/study/entries`` | 自主学习子条目列表（``?id=study:主题``） |
+| POST | ``/study/entries`` | **写**：新建/更新子条目（含各类 item） |
+| DELETE | ``/study/entries`` | **写**：删子条目或单项（必须 ``confirm=true``） |
+| POST | ``/study/items/resolve-repo`` | 从论文找代码仓库候选（只读搜索，不自动选定/克隆） |
+| POST | ``/study/items/clone-repo`` | **写**：用户确认后克隆到 ``<对象根>/code/`` |
+| POST | ``/study/items/open`` | 用 VSCode 打开已克隆仓库（仅对象根内 git 仓库） |
+| POST | ``/study/items/click`` | **写**：记录点击次数（学习记录） |
+| GET | ``/study/records`` | 对象级学习记录汇总 |
 
 ## 安全边界（本文件必须保持）
 * 客户端**从不**传绝对路径：对象用 ``course:`` / ``study:`` 前缀 id，材料用相对路径，
@@ -106,6 +115,9 @@ materials = _core.materials
 paths = _core.paths
 schema = _core.quiz_schema
 quiz_store = _core.quiz_store
+study = _core.study
+records = _core.records
+repo_ops = _core.repo_ops
 
 router = APIRouter()
 
@@ -130,6 +142,10 @@ def _guard(fn, *args, **kwargs):
         raise HTTPException(status_code=422, detail={"message": "题库结构非法", "issues": exc.issues}) from exc
     except ValueError as exc:
         raise _bad(str(exc), 422) from exc
+    except (study.StudyStoreError, records.RecordStoreError) as exc:
+        # 损坏文件已备份 .bak，返回可恢复的 500 而不是静默清空
+        raise HTTPException(status_code=500, detail={"message": str(exc),
+                                                      "recoverable": True}) from exc
 
 
 def _object_id(value: Optional[str]) -> str:
@@ -347,3 +363,132 @@ def github_repo(repo: str = Query(..., max_length=200)) -> Dict[str, Any]:
     if parsed is None:
         raise _bad("只接受 github.com/<owner>/<repo>（不允许其它主机或带 query 的 URL）")
     return _guard(links.github_repo, parsed[0], parsed[1])
+
+
+# --------------------------------------------------------------------------
+# 自主学习子条目 + 多媒体项 + 学习记录
+# --------------------------------------------------------------------------
+@router.get("/study/entries")
+def study_entries(id: str = Query(..., max_length=140)) -> Dict[str, Any]:
+    """列出对象的子条目（含 items）。只读。"""
+    object_id = _object_id(id)
+    entries = _guard(study.get_entries, object_id)
+    return {"object_id": object_id, "entries": entries, "count": len(entries)}
+
+
+@router.post("/study/entries")
+def study_save_entry(payload: Dict[str, Any] = Body(...)) -> Dict[str, Any]:
+    """新建（无 entry_id）或更新（有 entry_id）子条目。
+
+    请求体：``{object_id, entry_id?, title, note?, items?, add_items?}``；
+    ``items`` 给定则整体替换该条目 items，``add_items`` 给定则追加。
+    """
+    if not isinstance(payload, dict):
+        raise _bad("请求体必须是对象")
+    object_id = _object_id(payload.get("object_id"))
+    entry_id = payload.get("entry_id")
+    if entry_id is not None and not isinstance(entry_id, str):
+        raise _bad("entry_id 必须是字符串")
+    if entry_id:
+        entry = _guard(study.update_entry, object_id, entry_id,
+                       title=payload.get("title"),
+                       note=payload.get("note"),
+                       items=payload.get("items") if "items" in payload else None,
+                       add_items=payload.get("add_items") if "add_items" in payload else None)
+    else:
+        if "title" not in payload:
+            raise _bad("新建子条目必须给 title")
+        entry = _guard(study.create_entry, object_id, payload.get("title"),
+                       note=payload.get("note"),
+                       items=payload.get("items"))
+    return {"ok": True, "entry": entry}
+
+
+@router.delete("/study/entries")
+def study_delete_entry(id: str = Query(..., max_length=140),
+                       entry_id: str = Query(..., max_length=80),
+                       item_id: Optional[str] = Query(None, max_length=80),
+                       confirm: bool = Query(False)) -> Dict[str, Any]:
+    """删除子条目（无 item_id）或单项（有 item_id）。**必须 confirm=true**。"""
+    object_id = _object_id(id)
+    if not confirm:
+        raise _bad("删除必须显式确认：传 confirm=true")
+    if item_id:
+        return _guard(study.delete_item, object_id, entry_id, item_id)
+    return _guard(study.delete_entry, object_id, entry_id)
+
+
+@router.post("/study/items/resolve-repo")
+def study_resolve_repo(payload: Dict[str, Any] = Body(...)) -> Dict[str, Any]:
+    """从 Zotero 文献找代码仓库候选。只读搜索，绝不自动选定/克隆。"""
+    if not isinstance(payload, dict):
+        raise _bad("请求体必须是对象")
+    item_key = str(payload.get("item_key") or payload.get("itemKey") or "").strip().upper()
+    if not item_key:
+        raise _bad("缺少 item_key（Zotero 8 位 key）")
+    return _guard(repo_ops.resolve_repo_candidates, item_key)
+
+
+@router.post("/study/items/clone-repo")
+def study_clone_repo(payload: Dict[str, Any] = Body(...)) -> Dict[str, Any]:
+    """用户确认候选后克隆仓库到 ``<对象根>/code/<owner>__<repo>``。"""
+    if not isinstance(payload, dict):
+        raise _bad("请求体必须是对象")
+    object_id = _object_id(payload.get("object_id"))
+    provider = payload.get("provider")
+    url = payload.get("url")
+    if not isinstance(url, str) or not url.strip():
+        raise _bad("缺少 url")
+    result = _guard(repo_ops.clone_repo, object_id, provider, url)
+    # 克隆成功后回写 item 的克隆状态（若给了 entry_id + item_id）
+    entry_id = payload.get("entry_id")
+    item_id = payload.get("item_id")
+    if result.get("status") == "ok" and entry_id and item_id:
+        try:
+            _guard(study.mark_repo_cloned, object_id, entry_id, item_id,
+                   result.get("path", ""))
+        except paths.PathNotAllowed:
+            pass  # item 已被删不影响克隆结果返回
+    return result
+
+
+@router.post("/study/items/open")
+def study_open_item(payload: Dict[str, Any] = Body(...)) -> Dict[str, Any]:
+    """用 VSCode 打开已克隆仓库。只允许对象根内的 git 仓库路径。"""
+    if not isinstance(payload, dict):
+        raise _bad("请求体必须是对象")
+    object_id = _object_id(payload.get("object_id"))
+    local_path = payload.get("local_path")
+    item_id = payload.get("item_id")
+    if not local_path and item_id:
+        item = _guard(study.find_item, object_id, item_id)
+        if item is None:
+            raise _bad(f"item 不存在：{item_id}", 404)
+        local_path = item.get("local_path")
+    if not isinstance(local_path, str) or not local_path.strip():
+        raise _bad("该仓库尚未下载（无 local_path），前端应直接 window.open 仓库网址")
+    return _guard(repo_ops.open_in_vscode, object_id, local_path)
+
+
+@router.post("/study/items/click")
+def study_click_item(payload: Dict[str, Any] = Body(...)) -> Dict[str, Any]:
+    """记录一次点击（学习记录）。无论打开成功与否都计数，失败由前端提示。"""
+    if not isinstance(payload, dict):
+        raise _bad("请求体必须是对象")
+    object_id = _object_id(payload.get("object_id"))
+    item_id = payload.get("item_id")
+    if not isinstance(item_id, str) or not item_id.strip():
+        raise _bad("缺少 item_id")
+    item_type = payload.get("item_type")
+    entry_id = payload.get("entry_id")
+    rec = _guard(records.record_click, object_id, item_id,
+                 item_type=item_type if isinstance(item_type, str) else None,
+                 entry_id=entry_id if isinstance(entry_id, str) else None)
+    return {"ok": True, "record": rec}
+
+
+@router.get("/study/records")
+def study_records(id: str = Query(..., max_length=140)) -> Dict[str, Any]:
+    """对象级学习记录汇总（总点击、按类型、最近 7/30 天、每条目/每 item 次数）。"""
+    object_id = _object_id(id)
+    return _guard(records.summarize, object_id)

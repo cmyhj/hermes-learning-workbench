@@ -10,6 +10,9 @@
 * ``quiz_store`` —— quiz-library 读取、草稿 staging、原子保存
 * ``materials``  —— 只读资料清单与安全文本预览（格式能力如实声明）
 * ``links``      —— 只读 Zotero collections 与 GitHub 仓库
+* ``study``      —— 自主学习子条目（论文/仓库/视频/网站）数据模型与 CRUD
+* ``records``    —— 点击次数学习记录（原子自增 + 聚合）
+* ``repo_ops``   —— 从论文找仓库、克隆、VSCode 打开（显式确认，绝不自动）
 
 ## 为什么包内一律用相对导入
 Hermes 的 ``plugin_isolation.import_user_code()`` 用
@@ -31,7 +34,7 @@ VOLUME_VERSION = "2.0.0"
 
 # 子模块在这里显式导入：让 ``_core.catalog`` 这种按属性取用的写法成立，
 # 也让「包本身可用」能被一次 import 验证到，而不是等第一个请求才炸。
-from . import catalog, links, materials, paths, quiz_schema, quiz_store  # noqa: E402,F401
+from . import catalog, links, materials, paths, quiz_schema, quiz_store, records, repo_ops, study  # noqa: E402,F401
 
 __all__ = [
     "VOLUME_VERSION",
@@ -41,4 +44,7 @@ __all__ = [
     "paths",
     "quiz_schema",
     "quiz_store",
+    "records",
+    "repo_ops",
+    "study",
 ]

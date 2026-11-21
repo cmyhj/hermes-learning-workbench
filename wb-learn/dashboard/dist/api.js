@@ -97,6 +97,33 @@
       zoteroCollections: function () { return get("/zotero/collections"); },
       zoteroCollection: function (key) { return get("/zotero/collection", { key: key }); },
       githubRepo: function (repo) { return get("/github/repo", { repo: repo }); },
+
+      // ---- 自主学习子条目 + 学习记录
+      studyEntries: function (id) { return get("/study/entries", { id: id }); },
+      saveStudyEntry: function (objectId, payload) {
+        return send("POST", "/study/entries", Object.assign({ object_id: objectId }, payload || {}));
+      },
+      deleteStudyEntry: function (objectId, entryId, itemId) {
+        return fetchJSON(BASE + "/study/entries" + qs({
+          id: objectId, entry_id: entryId, item_id: itemId || "", confirm: "true",
+        }), { method: "DELETE" });
+      },
+      resolveRepo: function (itemKey) {
+        return send("POST", "/study/items/resolve-repo", { item_key: itemKey });
+      },
+      cloneRepo: function (objectId, payload) {
+        return send("POST", "/study/items/clone-repo", Object.assign({ object_id: objectId }, payload || {}));
+      },
+      openRepo: function (objectId, payload) {
+        return send("POST", "/study/items/open", Object.assign({ object_id: objectId }, payload || {}));
+      },
+      clickItem: function (objectId, itemId, itemType, entryId) {
+        return send("POST", "/study/items/click", {
+          object_id: objectId, item_id: itemId,
+          item_type: itemType || "", entry_id: entryId || "",
+        });
+      },
+      studyRecords: function (id) { return get("/study/records", { id: id }); },
     };
   }
 

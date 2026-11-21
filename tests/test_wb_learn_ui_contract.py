@@ -59,7 +59,7 @@ def test_no_hardcoded_personal_paths_in_frontend():
 def test_all_parts_are_loaded_by_the_shell():
     index = (DIST / "index.js").read_text(encoding="utf-8")
     for part in ("api.js", "quiz.js", "views.js", "panels.js", "quizpanel.js",
-                 "linkspanel.js", "chatbridge.js"):
+                 "linkspanel.js", "studyentries.js", "chatbridge.js"):
         assert (DIST / part).is_file(), f"缺 {part}"
         assert part in index, f"index.js 没有注入 {part}"
 
@@ -80,17 +80,24 @@ def test_only_expected_write_calls_exist():
         "stageDraft": "POST /quiz/drafts（只写 plugin-data 草稿）",
         "commitDraft": "POST /quiz/drafts/{id}/commit（写 quiz-library）",
         "saveLinks": "PUT /links（写 plugin-data 链接登记）",
+        "saveStudyEntry": "POST /study/entries（写 plugin-data 子条目）",
+        "deleteStudyEntry": "DELETE /study/entries?confirm=true（写 plugin-data 子条目）",
+        "cloneRepo": "POST /study/items/clone-repo（克隆到对象 code/ 目录）",
+        "openRepo": "POST /study/items/open（用 VSCode 打开已克隆仓库）",
+        "clickItem": "POST /study/items/click（写 plugin-data 学习记录）",
     }
-    side_effect_free = {"grade"}
+    side_effect_free = {"grade", "resolveRepo"}
     api_src = (DIST / "api.js").read_text(encoding="utf-8")
     # 逐处定位 send("POST"/"PUT"/"DELETE")，再往前找最近的「名字: function」——
     # 不能用「function 到 send 之间不含 }」的正则：函数体里出现对象字面量就会漏判。
     writes = set()
-    for hit in re.finditer(r'send\(\s*"(POST|PUT|DELETE)"', api_src):
-        head = api_src[:hit.start()]
-        names = re.findall(r"(\w+):\s*function", head)
-        assert names, f"无法定位写调用对应的函数：{hit.group(0)}"
-        writes.add(names[-1])
+    patterns = (r'send\(\s*"(POST|PUT|DELETE)"', r'method:\s*"(POST|PUT|DELETE)"')
+    for pattern in patterns:
+        for hit in re.finditer(pattern, api_src):
+            head = api_src[:hit.start()]
+            names = re.findall(r"(\w+):\s*function", head)
+            assert names, f"无法定位写调用对应的函数：{hit.group(0)}"
+            writes.add(names[-1])
     assert writes == set(expected) | side_effect_free, \
         f"写接口清单变了：{writes ^ (set(expected) | side_effect_free)}"
 
@@ -99,7 +106,7 @@ def test_only_expected_write_calls_exist():
     assert '"/quiz/grade"' in grade_body
 
     # 视图层不能自己拼 POST
-    for js in ("panels.js", "quizpanel.js", "linkspanel.js", "index.js"):
+    for js in ("panels.js", "quizpanel.js", "linkspanel.js", "studyentries.js", "index.js"):
         text = (DIST / js).read_text(encoding="utf-8")
         assert 'method: "POST"' not in text and "method: 'POST'" not in text
 

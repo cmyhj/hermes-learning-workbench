@@ -182,6 +182,48 @@ def zotero_collection_items(key: str, *, limit: int = 30) -> Dict[str, Any]:
     return {"available": True, "error": None, "collection": key, "count": len(out), "items": out}
 
 
+def zotero_item(key: str) -> Dict[str, Any]:
+    """读单条 Zotero 文献的**元数据**（标题/摘要/DOI/arXiv/extra/url）。只读。
+
+    用于「一键从论文找代码仓库」：给 ``itemKey``，拿标题/摘要关键词与 DOI/arXiv 号
+    去 GitHub 搜索。不下载 PDF、不写批注、不改动 Zotero。
+    """
+    if not _COLLECTION_KEY_RE.match(key or ""):
+        raise paths.PathNotAllowed("item key 形状非法（8 位大写字母数字）")
+    data, error = _zotero_get(f"items/{key}")
+    if error:
+        return {"available": False, "error": error, "key": key}
+    inner = (data or {}).get("data") if isinstance(data, dict) else None
+    if not isinstance(inner, dict):
+        return {"available": False, "error": "Zotero 返回的条目形状无法识别", "key": key}
+    extra = str(inner.get("extra") or "")
+    arxiv = None
+    m = re.search(r"arXiv:\s*([\w./-]+)", extra)
+    if m:
+        arxiv = m.group(1)
+    url = inner.get("url")
+    github_url = None
+    if isinstance(url, str):
+        parsed = parse_github_url(url)
+        if parsed:
+            github_url = f"https://github.com/{parsed[0]}/{parsed[1]}"
+    creators = inner.get("creators") or []
+    names = [str(c.get("lastName") or c.get("name") or "").strip() for c in creators if isinstance(c, dict)]
+    return {
+        "available": True,
+        "error": None,
+        "key": key,
+        "title": str(inner.get("title") or "").strip(),
+        "abstract": str(inner.get("abstractNote") or "").strip(),
+        "doi": inner.get("DOI") or None,
+        "arxiv": arxiv,
+        "url": url if isinstance(url, str) else None,
+        "github_url": github_url,
+        "authors": [n for n in names if n][:4],
+        "item_type": inner.get("itemType"),
+    }
+
+
 # --------------------------------------------------------------------------
 # GitHub（只读）
 # --------------------------------------------------------------------------

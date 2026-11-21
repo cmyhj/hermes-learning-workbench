@@ -42,6 +42,7 @@
     { id: "materials", label: "材料" },
     { id: "notes", label: "笔记" },
     { id: "links", label: "关联（Zotero / GitHub）" },
+    { id: "study", label: "子条目" },
   ];
 
   // ---------------------------------------------------------------- 资产装载
@@ -73,13 +74,15 @@
     var chain = Promise.resolve();
     [["api.js", "data-wbl-api"], ["quiz.js", "data-wbl-quiz"], ["views.js", "data-wbl-views"],
      ["panels.js", "data-wbl-panels"], ["quizpanel.js", "data-wbl-quizpanel"],
-     ["linkspanel.js", "data-wbl-linkspanel"], ["chatbridge.js", "data-wbl-chatbridge"]]
+     ["linkspanel.js", "data-wbl-linkspanel"], ["studyentries.js", "data-wbl-study"],
+     ["chatbridge.js", "data-wbl-chatbridge"]]
       .forEach(function (pair) {
         chain = chain.then(function () { return injectScript(DIST + pair[0], pair[1]); });
       });
     loadPromise = chain.then(function () {
       if (!window.WBL_API || !window.WBL_QUIZ || !window.WBL_VIEWS ||
-          !window.WBL_QUIZPANEL || !window.WBL_LINKS || !window.WBL_PANELS || !window.WBL_CHATBRIDGE) {
+          !window.WBL_QUIZPANEL || !window.WBL_LINKS || !window.WBL_PANELS || !window.WBL_CHATBRIDGE ||
+          !window.WBL_STUDY) {
         throw new Error("部分的 dist 脚本没有挂上全局对象");
       }
       var api = window.WBL_API.make(fetchJSON);
@@ -91,6 +94,7 @@
         PANELS: window.WBL_PANELS.make(SDK, api, views),
         QUIZPANEL: window.WBL_QUIZPANEL.make(SDK, api, views, window.WBL_QUIZ),
         LINKS: window.WBL_LINKS.make(SDK, api, views),
+        STUDY: window.WBL_STUDY.make(SDK, api, views),
         BRIDGE: window.WBL_CHATBRIDGE,
       };
     });
@@ -356,6 +360,14 @@
         objectId: current.id, object: current, objects: data.objects,
         vaultCourses: data.vault_courses, noteFiles: noteFiles, onReindex: onReload,
       });
+    } else if (tab === "study") {
+      // 子条目只对「自主学习」对象有意义：课程对象如实说明，不伪造空面板
+      body = current.kind === "study"
+        ? h(parts.STUDY.StudyEntriesPanel, { objectId: current.id, object: current, onReload: onReload })
+        : h(V.Empty, {
+            title: "子条目只用于自主学习项目",
+            hint: "当前是课程对象。课程的知识组织走「题库 / 刷题」「材料」「笔记」三个标签。",
+          });
     } else {
       body = h(parts.LINKS.LinksPanel, { objectId: current.id });
     }
