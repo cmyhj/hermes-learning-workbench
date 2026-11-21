@@ -207,12 +207,17 @@ def _object_entry(object_id: str, vault_names: List[str], mapping: Dict[str, Any
     real = paths.safe_under(root, directory)
     if real is None or not real.is_dir():
         return None
+    try:
+        modified_at = real.stat().st_mtime
+    except OSError:
+        modified_at = 0
     quiz_dir = real / "quiz-library"
     return {
         "id": object_id,
         "kind": kind_of(object_id),
         "name": name_of(object_id),
         "path": str(real),
+        "modified_at": modified_at,
         "description": _short_desc(real),
         "counts": _counts(real),
         "notes": _link_state(object_id, vault_names, mapping),
@@ -272,7 +277,7 @@ def list_objects() -> Dict[str, Any]:
             if entry is not None:
                 out.append(entry)
 
-    out.sort(key=lambda o: (o["kind"], o["name"].lower()))
+    out.sort(key=lambda o: (o["kind"], -o["modified_at"], o["name"].lower()))
     return {
         "generated_at": _dt.datetime.now().isoformat(timespec="seconds"),
         "roots": {
@@ -288,6 +293,53 @@ def list_objects() -> Dict[str, Any]:
         "mapping_file": str(mapping_file()),
         "errors": errors,
     }
+
+
+def preview_object(kind: str, name: str) -> Dict[str, Any]:
+    """Validate a new object name and return its exact configured-root location."""
+    if kind not in ("course", "study"):
+        raise paths.PathNotAllowed("对象类型只接受 course / study")
+    safe = paths.safe_child_name(name)
+    if safe != name:
+        raise paths.PathNotAllowed("名称不能被规范化")
+    roots = _roots()
+    root = roots["courses" if kind == "course" else "study"]
+    if not root.is_dir():
+        raise paths.PathNotAllowed(f"配置的{('课程' if kind == 'course' else '自主学习')}根目录不存在")
+    real_root = root.resolve(strict=True)
+    if paths.is_link(root):
+        raise paths.PathNotAllowed("配置根目录不能是符号链接或 junction")
+    target = root / safe
+    # Windows paths are case insensitive; reject case-only collisions as well.
+    collision = any(p.name.casefold() == safe.casefold() for p in paths.iter_children(root))
+    return {"kind": kind, "name": safe, "path": str(target),
+            "exists": collision or target.exists(), "root": str(real_root)}
+
+
+def create_object(kind: str, name: str) -> Dict[str, Any]:
+    """Create an empty learning directory under its configured root, without overwrite."""
+    preview = preview_object(kind, name)
+    if preview["exists"]:
+        raise paths.PathNotAllowed("目标已存在，未覆盖")
+    root = _roots()["courses" if kind == "course" else "study"]
+    target = root / preview["name"]
+    if paths.safe_under(root, root, allow_root=True) is None or paths.is_link(root):
+        raise paths.PathNotAllowed("配置根目录路径校验失败")
+    try:
+        target.mkdir()  # exclusive: concurrent requests cannot overwrite an existing object
+    except FileExistsError as exc:
+        raise paths.PathNotAllowed("目标已存在，未覆盖") from exc
+    except OSError as exc:
+        raise paths.PathNotAllowed(f"创建对象失败：{type(exc).__name__}") from exc
+    if paths.safe_under(root, target) is None:
+        try:
+            target.rmdir()
+        except OSError:
+            pass
+        raise paths.PathNotAllowed("创建路径越过配置根目录")
+    return {"ok": True, "object": _object_entry(
+        (COURSE_PREFIX if kind == "course" else STUDY_PREFIX) + preview["name"],
+        _vault_courses(), load_mapping())}
 
 
 def get_object(object_id: str) -> Optional[Dict[str, Any]]:

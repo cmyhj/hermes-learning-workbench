@@ -181,6 +181,17 @@ def objects() -> Dict[str, Any]:
     return _guard(catalog.list_objects)
 
 
+@router.get("/objects/preview")
+def preview_object(kind: str = Query(..., max_length=20),
+                   name: str = Query(..., max_length=120)) -> Dict[str, Any]:
+    return _guard(catalog.preview_object, kind, name)
+
+
+@router.post("/objects")
+def create_object(payload: Dict[str, Any] = Body(...)) -> Dict[str, Any]:
+    return _guard(catalog.create_object, payload.get("kind"), payload.get("name"))
+
+
 @router.get("/object")
 def object_detail(id: str = Query(..., max_length=140)) -> Dict[str, Any]:
     object_id = _object_id(id)

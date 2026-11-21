@@ -124,6 +124,14 @@ def safe_child_name(name: str) -> str:
             raise PathNotAllowed(f"名称含非法字符：{bad!r}")
     if name.startswith("."):
         raise PathNotAllowed("名称不能以点开头")
+    if name.endswith((".", " ")):
+        raise PathNotAllowed("Windows 名称不能以点或空格结尾")
+    if any(ord(ch) < 32 for ch in name):
+        raise PathNotAllowed("名称不能包含控制字符")
+    stem = name.split(".", 1)[0].upper()
+    if stem in {"CON", "PRN", "AUX", "NUL", *(f"COM{i}" for i in range(1, 10)),
+                *(f"LPT{i}" for i in range(1, 10))}:
+        raise PathNotAllowed("名称是 Windows 保留设备名")
     return name
 
 

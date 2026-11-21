@@ -57,6 +57,18 @@
   font-variant-numeric: tabular-nums;
 }
 
+.wbl-kind-switch { display: flex; gap: 6px; margin: 8px 0; }
+.wbl-kind-switch .wbl-btn { flex: 1; }
+.wbl-newobject { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center;
+  padding: 20px; background: rgba(0, 0, 0, .42); }
+.wbl-newobject-card { width: min(560px, 100%); display: flex; flex-direction: column; gap: 10px;
+  padding: 20px; border: 1px solid var(--color-border); border-radius: var(--radius-md, 8px);
+  background: var(--color-card); box-shadow: 0 12px 40px rgba(0,0,0,.24); }
+.wbl-newobject-card h2 { margin: 0; font-size: 17px; }
+.wbl-preview { display: grid; gap: 5px; padding: 10px; border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm, 6px); background: var(--color-background, transparent); }
+.wbl-preview code { overflow-wrap: anywhere; }
+
 .wbl-sublist {
   list-style: none;
   margin: 0 0 8px;

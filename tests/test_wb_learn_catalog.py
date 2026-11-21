@@ -173,3 +173,43 @@ def test_stdin_git_config_without_origin_is_none(scratch):
     api = scratch.api()
     obj = next(o for o in api.objects()["objects"] if o["name"] == "无远端")
     assert obj["git"] is None
+
+
+def test_object_creation_preview_and_exclusive_create(scratch):
+    api = scratch.api()
+    preview = api.preview_object(kind="study", name="新主题")
+    assert preview["path"] == str(scratch.study / "新主题")
+    assert preview["exists"] is False
+    created = api.create_object({"kind": "study", "name": "新主题"})
+    assert created["object"]["id"] == "study:新主题"
+    assert (scratch.study / "新主题").is_dir()
+    assert api.preview_object(kind="study", name="新主题")["exists"] is True
+    with pytest.raises(api.HTTPException) as err:
+        api.create_object({"kind": "study", "name": "新主题"})
+    assert err.value.status_code == 403
+
+
+@pytest.mark.parametrize("name", ["../escape", "bad/name", "trailing.", "NUL", "COM1.txt"])
+def test_new_object_rejects_unsafe_windows_names(scratch, name):
+    api = scratch.api()
+    api = scratch.api()
+    with pytest.raises(api.HTTPException) as err:
+        api.preview_object(kind="course", name=name)
+    assert err.value.status_code == 403
+
+
+def test_catalog_groups_are_newest_first(scratch):
+    import os
+    import time
+    scratch.course("old")
+    scratch.course("new")
+    scratch.study_topic("study-old")
+    scratch.study_topic("study-new")
+    now = time.time()
+    os.utime(scratch.courses / "old", (now - 20, now - 20))
+    os.utime(scratch.courses / "new", (now, now))
+    os.utime(scratch.study / "study-old", (now - 20, now - 20))
+    os.utime(scratch.study / "study-new", (now, now))
+    data = scratch.api().objects()
+    assert [o["name"] for o in data["courses"][:2]] == ["new", "old"]
+    assert [o["name"] for o in data["study"][:2]] == ["study-new", "study-old"]

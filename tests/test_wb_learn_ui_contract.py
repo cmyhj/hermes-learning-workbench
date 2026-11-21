@@ -85,6 +85,7 @@ def test_only_expected_write_calls_exist():
         "cloneRepo": "POST /study/items/clone-repo（克隆到对象 code/ 目录）",
         "openRepo": "POST /study/items/open（用 VSCode 打开已克隆仓库）",
         "clickItem": "POST /study/items/click（写 plugin-data 学习记录）",
+        "createObject": "POST /objects（仅在预览后新建空目录）",
     }
     side_effect_free = {"grade", "resolveRepo"}
     api_src = (DIST / "api.js").read_text(encoding="utf-8")
@@ -174,6 +175,15 @@ def test_styles_cover_the_new_components():
         assert "." + cls in css, f"样式缺 {cls}"
     assert "@media (max-width: 760px)" in css, "需要手机断点"
     assert "@media (max-width: 1180px)" in css
+    assert ".wbl-kind-switch" in css and ".wbl-newobject" in css
+
+
+def test_learning_kind_switch_and_course_tabs_are_explicit():
+    views = (DIST / "views.js").read_text(encoding="utf-8")
+    index = (DIST / "index.js").read_text(encoding="utf-8")
+    assert '"自主学习"' in views and '"课程"' in views
+    assert 't.id === "quiz" || t.id === "materials" || t.id === "notes"' in index
+    assert "onNew" in views and "previewObject" in index and "createObject" in index
 
 
 pytestmark_node = pytest.mark.skipif(shutil.which("node") is None, reason="node 未安装")

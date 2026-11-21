@@ -58,6 +58,8 @@
       // ---- 概览 / 对象
       health: function () { return get("/health"); },
       objects: function () { return get("/objects"); },
+      previewObject: function (kind, name) { return get("/objects/preview", { kind: kind, name: name }); },
+      createObject: function (kind, name) { return send("POST", "/objects", { kind: kind, name: name }); },
       object: function (id) { return get("/object", { id: id }); },
       saveNoteLink: function (id, vault) {
         return send("PUT", "/object/notes" + qs({ id: id, vault: vault || "" }), {});

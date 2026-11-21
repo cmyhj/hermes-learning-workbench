@@ -60,8 +60,8 @@
       },
         h("span", { className: NS + "-obj-name" }, o.name),
         h("span", { className: NS + "-obj-meta" },
-          h(NoteBadge, { notes: o.notes }),
-          o.quiz_library && o.quiz_library.exists
+          o.kind === "course" ? h(NoteBadge, { notes: o.notes }) : null,
+          o.kind !== "course" ? null : o.quiz_library && o.quiz_library.exists
             ? h(Tag, { tone: "info", title: o.quiz_library.path }, "题库")
             : h(Tag, { tone: "muted", title: "还没有 quiz-library 目录" }, "无题库"),
           o.git ? h(Tag, { tone: "muted", title: "本地 .git 发现 origin" }, "git") : null));
@@ -69,11 +69,13 @@
 
     function Sidebar(props) {
       var [filter, setFilter] = useState("");
+      var kind = props.kind || "course";
+      var setKind = props.onKindChange || function () {};
       var all = props.objects || [];
       var needle = filter.trim().toLowerCase();
       function match(o) { return !needle || o.name.toLowerCase().indexOf(needle) >= 0; }
-      var courses = all.filter(function (o) { return o.kind === "course" && match(o); });
-      var study = all.filter(function (o) { return o.kind === "study" && match(o); });
+      var items = all.filter(function (o) { return o.kind === kind && match(o); })
+        .sort(function (a, b) { return (b.modified_at || 0) - (a.modified_at || 0) || a.name.localeCompare(b.name); });
 
       function group(title, items, emptyHint) {
         return h("div", { className: NS + "-group" },
@@ -98,10 +100,22 @@
           className: NS + "-search", placeholder: "过滤名称…", value: filter,
           onChange: function (e) { setFilter(e.target.value); },
         }),
-        group("课程", courses, props.roots && props.roots.courses && !props.roots.courses.exists
-          ? "课程根目录不存在：" + props.roots.courses.path
-          : "没有匹配的课程目录"),
-        group("自主学习", study, "没有匹配的自主学习主题（见后端 roots.study）"),
+        h("div", { className: NS + "-kind-switch", role: "tablist", "aria-label": "学习类型" },
+          [ ["course", "课程"], ["study", "自主学习"] ].map(function (pair) {
+            return h("button", { key: pair[0], type: "button", role: "tab",
+              "aria-selected": kind === pair[0],
+              className: NS + "-btn " + (kind === pair[0] ? NS + "-btn-primary" : NS + "-btn-quiet"),
+              onClick: function () { setKind(pair[0]); } }, pair[1]);
+          })),
+        h("button", { className: NS + "-btn " + NS + "-btn-quiet", onClick: function () {
+          if (props.onNew) props.onNew(kind);
+        } }, kind === "course" ? "＋ 新建课程" : "＋ 新建自主学习"),
+        group(kind === "course" ? "课程" : "自主学习", items,
+          kind === "course"
+            ? (props.roots && props.roots.courses && !props.roots.courses.exists
+              ? "课程根目录不存在：" + props.roots.courses.path : "没有匹配的课程目录")
+            : (props.roots && props.roots.study && !props.roots.study.exists
+              ? "自主学习根目录不存在：" + props.roots.study.path : "没有匹配的自主学习主题")),
         h("p", { className: NS + "-sidehint" },
           "扫描只读一层，跳过 vault / 隐藏目录 / 符号链接。"));
     }

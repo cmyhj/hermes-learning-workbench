@@ -216,6 +216,25 @@ def test_clone_rejects_outside_object_root(scratch):
         repo_ops.clone_repo(STUDY_ID, "github", "https://github.com/../../etc/passwd")
 
 
+def test_clone_rejects_code_directory_symlink_or_junction(scratch, tmp_path, monkeypatch):
+    _study_topic(scratch)
+    _, _, repo_ops = _svc(scratch)
+    outside = tmp_path / "outside-code"
+    outside.mkdir()
+    code = scratch.study / "RL教学" / "code"
+    try:
+        code.symlink_to(outside, target_is_directory=True)
+    except (OSError, NotImplementedError):
+        pytest.skip("当前 Windows 环境不允许创建目录链接")
+    called = []
+    monkeypatch.setattr(repo_ops, "_run_git", lambda *a, **k: called.append(a) or (0, "", ""))
+    from wbl_core import paths
+    with pytest.raises(paths.PathNotAllowed):
+        repo_ops.clone_repo(STUDY_ID, "github", "https://github.com/o/r")
+    assert called == []
+    assert list(outside.iterdir()) == []
+
+
 # ---------------------------------------------------------------- open-in-vscode
 def test_open_rejects_path_outside_object_root(scratch):
     _study_topic(scratch)
@@ -265,6 +284,13 @@ def test_open_calls_vscode_with_list_args(scratch, monkeypatch):
     assert out["status"] == "ok"
     assert isinstance(seen["cmd"], list) and seen["cmd"][0] == "code"
     assert seen["shell"] is False, "禁止 shell=True"
+
+
+def test_vscode_lookup_never_returns_windows_batch(monkeypatch):
+    from wbl_core import repo_ops
+    monkeypatch.setattr(repo_ops.shutil, "which", lambda name: r"C:\VSCode\code.cmd")
+    monkeypatch.setattr(repo_ops.Path, "is_file", lambda self: False)
+    assert repo_ops._find_vscode() is None
 
 
 # ---------------------------------------------------------------- 点击计数

@@ -38,8 +38,9 @@ GIT_PROXY = os.environ.get("WB_LEARN_GIT_PROXY") or "http://127.0.0.1:7890"
 GH_SEARCH_LIMIT = 10
 GH_TIMEOUT = 20
 VSCODE_CANDIDATES = (
-    r"D:/DevEnvironments/IDE/Microsoft VS Code/bin/code.cmd",
-    "code",
+    r"D:/DevEnvironments/IDE/Microsoft VS Code/Code.exe",
+    "Code.exe",
+    "code.exe",
 )
 
 _STOPWORDS = {
@@ -168,12 +169,19 @@ def clone_repo(object_id: str, provider: str, url: str) -> Dict[str, Any]:
     owner, repo = study._parse_repo_url(provider, url)
 
     root = study.object_root(object_id)
+    configured_root = paths.default_roots()["study"]
+    if paths.is_link(root) or paths.safe_under(configured_root, root) is None:
+        raise paths.PathNotAllowed("自主学习对象目录越过配置根或是链接")
     code_dir = root / CODE_DIR_NAME
     target = code_dir / f"{owner}__{repo}"
 
     # code/ 可能还不存在（首次克隆）：先建目录再校验，否则 safe_under 的
     # resolve(strict=True) 会因路径不存在而返回 None，把正常克隆误判成越界。
+    if code_dir.exists() and paths.is_link(code_dir):
+        raise paths.PathNotAllowed("code/ 不能是符号链接或 junction")
     code_dir.mkdir(parents=True, exist_ok=True)
+    if paths.is_link(code_dir) or paths.safe_under(root, code_dir) is None:
+        raise paths.PathNotAllowed("code/ 路径越过对象根或是链接")
 
     # 禁止目录穿越：target 必须落在 root/code 之下（已存在时按真实路径校验；
     # 不存在时校验其父目录在 code/ 内且名字未被规范化改变）
@@ -185,7 +193,7 @@ def clone_repo(object_id: str, provider: str, url: str) -> Dict[str, Any]:
         if target.name != f"{owner}__{repo}":
             raise paths.PathNotAllowed("克隆目标名称被规范化，拒绝")
 
-    if target.exists():
+    if target.exists() or target.is_symlink():
         return {"status": "exists", "path": str(target),
                 "owner": owner, "repo": repo,
                 "message": "目标目录已存在，未覆盖"}
@@ -219,6 +227,8 @@ def clone_repo(object_id: str, provider: str, url: str) -> Dict[str, Any]:
 # ---------------------------------------------------------------- open-in-vscode
 def _is_git_repo(path: Path) -> bool:
     git_dir = path / ".git"
+    if paths.is_link(git_dir):
+        return False
     if git_dir.is_dir() or git_dir.is_file():
         return True
     # HF 目录标志：HF 仓库克隆后可能带 .hf 标记
@@ -228,8 +238,10 @@ def _is_git_repo(path: Path) -> bool:
 def _find_vscode() -> Optional[str]:
     for cand in VSCODE_CANDIDATES:
         if cand == "code":
-            found = shutil.which("code")
-            if found:
+            continue
+        elif Path(cand).name.lower() in ("code.exe",) and "/" not in cand and "\\" not in cand:
+            found = shutil.which(cand)
+            if found and Path(found).suffix.lower() == ".exe":
                 return found
         elif Path(cand).is_file():
             return cand
@@ -242,7 +254,22 @@ def open_in_vscode(object_id: str, local_path: str) -> Dict[str, Any]:
     if not isinstance(local_path, str) or not local_path.strip():
         raise paths.PathNotAllowed("缺少 local_path")
     root = study.object_root(object_id)
+    configured_root = paths.default_roots()["study"]
+    if paths.is_link(root) or paths.safe_under(configured_root, root) is None:
+        raise paths.PathNotAllowed("自主学习对象目录越过配置根或是链接")
     candidate = Path(local_path.strip())
+    # Reject any reparse point along the requested path, even if it resolves back
+    # inside the object. This keeps clone/open containment consistent on Windows.
+    try:
+        lexical = Path(os.path.abspath(candidate))
+        lexical.relative_to(root.absolute())
+        cursor = root
+        for part in lexical.relative_to(root.absolute()).parts:
+            cursor = cursor / part
+            if cursor.exists() and paths.is_link(cursor):
+                raise paths.PathNotAllowed("local_path 包含符号链接或 junction")
+    except ValueError:
+        pass
     real = paths.safe_under(root, candidate)
     if real is None:
         raise paths.PathNotAllowed("local_path 不在对象根内（拒绝越界打开）")
@@ -253,7 +280,7 @@ def open_in_vscode(object_id: str, local_path: str) -> Dict[str, Any]:
     exe = _find_vscode()
     if not exe:
         return {"status": "error", "path": str(real),
-                "error": "未找到 VSCode CLI（D:/DevEnvironments/.../code.cmd 与 PATH 上 code 均无）"}
+                "error": "未找到 VSCode Code.exe（不会执行 Windows batch 文件）"}
     try:
         proc = subprocess.run([exe, str(real)], capture_output=True, text=True,
                               timeout=30, encoding="utf-8", errors="replace")

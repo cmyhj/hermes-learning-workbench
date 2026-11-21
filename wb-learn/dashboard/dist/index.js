@@ -191,6 +191,12 @@
     var [chatOpen, setChatOpen] = useState(true);
     var [chatDrawer, setChatDrawer] = useState(false);
     var [chatBusy, setChatBusy] = useState(false);
+    var [sidebarKind, setSidebarKind] = useState("course");
+    var [newKind, setNewKind] = useState(null);
+    var [newName, setNewName] = useState("");
+    var [newPreview, setNewPreview] = useState(null);
+    var [newError, setNewError] = useState(null);
+    var [newBusy, setNewBusy] = useState(false);
     var [promptNotice, setPromptNotice] = useState(null);
     var rootRef = props.useRef(null);
     // data 到位前走的是「加载中」早返回分支（没有 .wbl-root 挂 ref），
@@ -224,6 +230,8 @@
           var remembered = null;
           try { remembered = window.localStorage.getItem(SELECT_KEY); } catch (e) { remembered = null; }
           var hit = remembered && d.objects.some(function (o) { return o.id === remembered; });
+          var initial = hit ? d.objects.find(function (o) { return o.id === remembered; }) : d.objects[0];
+          if (initial) setSidebarKind(initial.kind);
           setSelected(function (prev) { return prev || (hit ? remembered : d.objects[0].id); });
         })
         .catch(function (e) { setLoadError(parts.API.messageOf(e)); });
@@ -247,12 +255,36 @@
 
     function selectObject(id) {
       setSelected(id);
-      setTab("quiz");
+      var picked = data && data.objects.find(function (o) { return o.id === id; });
+      if (picked) setSidebarKind(picked.kind);
+      setTab(String(id).indexOf("study:") === 0 ? "study" : "quiz");
       setPromptNotice(null);
       try { window.localStorage.setItem(SELECT_KEY, id); } catch (e) { /* 记不住不影响使用 */ }
     }
 
     var onReload = useCallback(function () { setReload(function (n) { return n + 1; }); }, []);
+
+    function previewNewObject() {
+      setNewError(null); setNewPreview(null);
+      parts.API.previewObject(newKind, newName)
+        .then(setNewPreview).catch(function (e) { setNewError(parts.API.messageOf(e)); });
+    }
+    function createNewObject() {
+      if (!newPreview || newPreview.exists || newPreview.name !== newName.trim()) return;
+      setNewBusy(true); setNewError(null);
+      parts.API.createObject(newKind, newName)
+        .then(function (r) {
+          var object = r.object;
+          setData(function (d) {
+            var objects = (d.objects || []).filter(function (o) { return o.id !== object.id; }).concat([object]);
+            return Object.assign({}, d, { objects: objects });
+          });
+          setSidebarKind(newKind); setNewKind(null); setNewName(""); setNewPreview(null);
+          selectObject(object.id);
+          setReload(function (n) { return n + 1; });
+        }).catch(function (e) { setNewError(parts.API.messageOf(e)); })
+        .then(function () { setNewBusy(false); });
+    }
 
     function bindPrompt(text) {
       if (!parts || !parts.BRIDGE) return false;
@@ -333,10 +365,14 @@
     if (!data) return h("div", { className: NS + "-root" }, h("p", { className: NS + "-hint" }, "扫描课程与自学主题…"));
 
     var V = parts.VIEWS;
-    var tabs = h("nav", { className: NS + "-tabs" }, TABS.map(function (t) {
+    var visibleTabs = current && current.kind === "course"
+      ? TABS.filter(function (t) { return t.id === "quiz" || t.id === "materials" || t.id === "notes"; })
+      : TABS.filter(function (t) { return t.id === "study" || t.id === "materials" || t.id === "links"; });
+    var activeTab = visibleTabs.some(function (t) { return tab === t.id; }) ? tab : "study";
+    var tabs = h("nav", { className: NS + "-tabs" }, visibleTabs.map(function (t) {
       return h("button", {
         key: t.id,
-        className: NS + "-tab" + (tab === t.id ? " " + NS + "-tab-active" : ""),
+        className: NS + "-tab" + (activeTab === t.id ? " " + NS + "-tab-active" : ""),
         onClick: function () { setTab(t.id); },
       }, t.label);
     }));
@@ -348,19 +384,19 @@
         hint: "扫描根：课程 " + data.roots.courses.path + " · 自主学习 " + data.roots.study.path +
               (data.errors && data.errors.length ? " · " + data.errors.join("；") : ""),
       });
-    } else if (tab === "quiz") {
+    } else if (activeTab === "quiz") {
       body = h(parts.QUIZPANEL.QuizPanel, {
         objectId: current.id, object: current, reloadToken: reload,
         onBindPrompt: bindPrompt, onPullReply: pullReply, onSaved: onReload,
       });
-    } else if (tab === "materials") {
+    } else if (activeTab === "materials") {
       body = h(parts.PANELS.MaterialsPanel, { objectId: current.id });
-    } else if (tab === "notes") {
+    } else if (activeTab === "notes") {
       body = h(parts.PANELS.NotesPanel, {
         objectId: current.id, object: current, objects: data.objects,
         vaultCourses: data.vault_courses, noteFiles: noteFiles, onReindex: onReload,
       });
-    } else if (tab === "study") {
+    } else if (activeTab === "study") {
       // 子条目只对「自主学习」对象有意义：课程对象如实说明，不伪造空面板
       body = current.kind === "study"
         ? h(parts.STUDY.StudyEntriesPanel, { objectId: current.id, object: current, onReload: onReload })
@@ -382,7 +418,13 @@
     return h("div", { className: NS + "-root" + (chatColumn ? " " + NS + "-root-chat" : ""), ref: rootRef },
       h(V.Sidebar, {
         objects: data.objects, selected: selected, roots: data.roots,
+        kind: sidebarKind, onKindChange: function (kind) {
+          setSidebarKind(kind);
+          var first = data.objects.find(function (o) { return o.kind === kind; });
+          if (first) selectObject(first.id);
+        },
         onSelect: selectObject,
+        onNew: function (kind) { setNewKind(kind); setNewName(""); setNewPreview(null); setNewError(null); },
       }),
       h("section", { className: NS + "-main" },
         h("header", { className: NS + "-head" },
@@ -400,6 +442,23 @@
               className: NS + "-btn " + NS + "-btn-quiet",
               onClick: function () { setChatDrawer(true); },
             }, "对话" + (chatBusy ? " ●" : "")))),
+        newKind ? h("div", { className: NS + "-newobject", role: "dialog", "aria-modal": "true" },
+          h("div", { className: NS + "-newobject-card" },
+            h("h2", null, newKind === "course" ? "新建课程" : "新建自主学习"),
+            h("label", null, "名称"),
+            h("input", { className: NS + "-input", value: newName, maxLength: 120,
+              onChange: function (e) { setNewName(e.target.value); setNewPreview(null); },
+              placeholder: "输入文件夹名称" }),
+            newPreview ? h("div", { className: NS + "-preview" },
+              h("strong", null, "创建位置预览"), h("code", null, newPreview.path),
+              newPreview.exists ? h("p", { className: NS + "-err" }, "目标已存在，不能覆盖。") : null) : null,
+            newError ? h("p", { className: NS + "-err" }, newError) : null,
+            h("div", { className: NS + "-linkrow" },
+              h("button", { className: NS + "-btn " + NS + "-btn-quiet", onClick: previewNewObject }, "预览位置"),
+              h("button", { className: NS + "-btn " + NS + "-btn-primary",
+                disabled: newBusy || !newPreview || newPreview.exists || newPreview.name !== newName.trim(),
+                onClick: createNewObject }, newBusy ? "创建中…" : "确认创建"),
+              h("button", { className: NS + "-btn " + NS + "-btn-quiet", onClick: function () { setNewKind(null); } }, "取消")))) : null,
         tabs,
         chatError ? h("p", { className: NS + "-err" }, "对话组件不可用：" + chatError) : null,
         promptNotice ? h("p", { className: NS + "-notice" }, promptNotice) : null,
