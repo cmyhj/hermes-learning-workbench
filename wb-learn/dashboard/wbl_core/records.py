@@ -142,7 +142,17 @@ def record_click(object_id: str, item_id: str, *,
             erec.setdefault("first_at", now)
         daily = bucket["daily"]
         today = _today()
-        daily[today] = int(daily.get(today, 0)) + 1
+        day_record = daily.get(today)
+        if not isinstance(day_record, dict):
+            # Keep old date -> integer records readable while enriching new records.
+            day_record = {"count": int(day_record or 0), "entries": {}, "items": {}, "types": {}}
+            daily[today] = day_record
+        day_record["count"] = int(day_record.get("count", 0)) + 1
+        if entry_id:
+            day_record.setdefault("entries", {})[entry_id] = int(day_record.get("entries", {}).get(entry_id, 0)) + 1
+        day_record.setdefault("items", {})[item_id] = int(day_record.get("items", {}).get(item_id, 0)) + 1
+        if item_type:
+            day_record.setdefault("types", {})[item_type] = int(day_record.get("types", {}).get(item_type, 0)) + 1
         save_all(data)
     return rec
 
@@ -196,7 +206,8 @@ def summarize(object_id: str) -> Dict[str, Any]:
 
     def _window(days: int) -> int:
         since = _days_ago(days - 1)
-        return sum(int(v) for k, v in daily.items() if k >= since)
+        return sum(int(v.get("count", 0) if isinstance(v, dict) else v)
+                   for k, v in daily.items() if k >= since)
 
     last_at = None
     for rec in items.values():
@@ -221,6 +232,8 @@ def summarize(object_id: str) -> Dict[str, Any]:
                   "last_at": r.get("last_at"), "first_at": r.get("first_at")}
             for iid, r in items.items()
         },
-        "daily": daily,
+        "daily": {day: (int(value.get("count", 0)) if isinstance(value, dict) else int(value))
+                  for day, value in daily.items()},
+        "daily_detail": {day: value for day, value in daily.items() if isinstance(value, dict)},
         "last_access": last_at,
     }

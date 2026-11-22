@@ -36,6 +36,7 @@
       }
 
       var available = props.collections && props.collections.available;
+      var resolution = z.resolution || {};
 
       return h("section", { className: NS + "-linkcard" },
         h("header", { className: NS + "-linkhead" },
@@ -64,8 +65,14 @@
                 onClick: function () { save(picked); },
               }, "保存登记")),
         z.error ? h("p", { className: NS + "-err" }, z.error) : null,
+        resolution.status === "auto"
+          ? h("p", { className: NS + "-sidehint" }, "当前未登记设置；子条目论文 picker 自动使用同名集合：" + resolution.collection.path + " [" + resolution.collection.key + "]（只读，不会写回 Zotero）")
+          : resolution.status === "ambiguous"
+            ? h("p", { className: NS + "-sidehint" }, "找到多个与项目同名的集合；添加论文时会要求选择集合路径。也可在此显式登记一个 collection。")
+            : resolution.status === "none"
+              ? h("p", { className: NS + "-sidehint" }, resolution.error + "。也可在此显式登记 collection。") : null,
         note ? h("p", { className: NS + "-sidehint" }, note) : null,
-        z.collection
+        !props.configOnly && z.collection
           ? h("div", { className: NS + "-linkbody" },
               h("p", { className: NS + "-path" }, z.collection.name + " · " + z.collection.key),
               (z.items || []).length
@@ -76,7 +83,7 @@
                         (it.authors || []).join(", ") + (it.date ? " · " + it.date : "")));
                   }))
                 : h("p", { className: NS + "-sidehint" }, "这个集合里没有条目。"))
-          : h("p", { className: NS + "-sidehint" }, "还没有登记 collection。只读，不写 Zotero。"));
+          : (!props.configOnly ? h("p", { className: NS + "-sidehint" }, "还没有登记 collection。只读，不写 Zotero。") : null));
     }
 
     function GithubCard(props) {
@@ -156,16 +163,16 @@
       if (!data) return h(Spinner, { label: "读取 Zotero / GitHub…" });
 
       return h("div", { className: NS + "-links" },
-        h("p", { className: NS + "-sidehint" }, data.policy),
+        !props.configOnly ? h("p", { className: NS + "-sidehint" }, data.policy) : null,
         h(ZoteroCard, {
           objectId: props.objectId, zotero: data.zotero,
           collections: data.zotero_collections,
           onReload: function () { setToken(token + 1); },
         }),
-        h(GithubCard, {
+        !props.configOnly ? h(GithubCard, {
           objectId: props.objectId, github: data.github,
           onReload: function () { setToken(token + 1); },
-        }));
+        }) : null);
     }
 
     return { LinksPanel: LinksPanel };

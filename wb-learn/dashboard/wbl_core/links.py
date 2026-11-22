@@ -182,6 +182,61 @@ def zotero_collection_items(key: str, *, limit: int = 30) -> Dict[str, Any]:
     return {"available": True, "error": None, "collection": key, "count": len(out), "items": out}
 
 
+def resolve_study_collection(object_id: str, *, collections: Optional[Dict[str, Any]] = None,
+                            requested_key: Optional[str] = None) -> Dict[str, Any]:
+    """Resolve the paper collection for a study, without persisting inferred choices."""
+    entry = _object_links(object_id)
+    configured = ((entry.get("zotero") or {}).get("collection")
+                  if isinstance(entry.get("zotero"), dict) else None)
+    found = collections if collections is not None else zotero_collections()
+    base = {"status": "unavailable", "configured_key": configured,
+            "collection": None, "choices": [], "error": found.get("error")}
+    if not found.get("available"):
+        return base
+    all_collections = found.get("collections") or []
+    by_key = {c.get("key"): c for c in all_collections if isinstance(c, dict)}
+    if configured:
+        if configured not in by_key:
+            return {**base, "status": "configured_missing",
+                    "error": "登记的 collection 已不在当前 Zotero 库中（未静默改绑）"}
+        return {**base, "status": "configured", "collection": by_key[configured],
+                "choices": [by_key[configured]], "error": None}
+    obj = catalog.get_object(object_id) or {}
+    project_name = str(obj.get("name") or "").strip()
+    exact = [c for c in all_collections if c.get("name") == project_name]
+    for c in exact:
+        parts, current, seen = [str(c.get("name") or "")], c, set()
+        while current.get("parent") and current["parent"] in by_key and current["parent"] not in seen:
+            seen.add(current["parent"])
+            current = by_key[current["parent"]]
+            parts.insert(0, str(current.get("name") or ""))
+        c["path"] = " / ".join(parts)
+    if len(exact) == 1:
+        return {**base, "status": "auto", "collection": exact[0],
+                "choices": exact, "error": None}
+    if len(exact) > 1:
+        allowed = {c.get("key") for c in exact}
+        if requested_key in allowed:
+            selected = next(c for c in exact if c.get("key") == requested_key)
+            return {**base, "status": "chosen", "collection": selected,
+                    "choices": exact, "error": None}
+        return {**base, "status": "ambiguous", "choices": exact,
+                "error": "有多个同名 Zotero collection，请选择路径"}
+    return {**base, "status": "none", "error": "没有同名 Zotero collection；请在 Zotero 设置中登记 collection"}
+
+
+def zotero_item_in_collection(item_key: str, collection_key: str) -> bool:
+    """Check actual direct collection membership using Zotero item metadata."""
+    if not _COLLECTION_KEY_RE.match(item_key or "") or not _COLLECTION_KEY_RE.match(collection_key or ""):
+        return False
+    data, error = _zotero_get(f"items/{item_key}")
+    if error or not isinstance(data, dict):
+        return False
+    inner = data.get("data") or {}
+    memberships = inner.get("collections") or []
+    return collection_key in memberships
+
+
 def zotero_item(key: str) -> Dict[str, Any]:
     """读单条 Zotero 文献的**元数据**（标题/摘要/DOI/arXiv/extra/url）。只读。
 
@@ -367,19 +422,20 @@ def object_links(object_id: str) -> Dict[str, Any]:
     entry = _object_links(object_id)
     collections = zotero_collections()
     key = (entry.get("zotero") or {}).get("collection") if isinstance(entry.get("zotero"), dict) else None
+    resolution = resolve_study_collection(object_id, collections=collections)
     zotero_out: Dict[str, Any] = {
         "configured_key": key,
+        "resolution": resolution,
         "available": collections["available"],
         "error": collections["error"],
         "collection": None,
         "items": [],
     }
-    if key:
-        if collections["available"] and key in {c["key"] for c in collections["collections"]}:
-            zotero_out["collection"] = next(c for c in collections["collections"] if c["key"] == key)
-            zotero_out["items"] = zotero_collection_items(key).get("items", [])
-        elif collections["available"]:
-            zotero_out["error"] = "登记的 collection 已不在当前 Zotero 库中（未静默改绑）"
+    if resolution.get("collection"):
+        zotero_out["collection"] = resolution["collection"]
+        zotero_out["items"] = zotero_collection_items(resolution["collection"]["key"]).get("items", [])
+    elif resolution.get("error"):
+        zotero_out["error"] = resolution["error"]
     return {
         "object_id": object_id,
         "zotero": zotero_out,

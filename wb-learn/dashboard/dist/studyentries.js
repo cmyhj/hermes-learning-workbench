@@ -66,11 +66,17 @@
     }
 
     // ---------------------------------------------------------------- item 点击
-    function clickThenAct(objectId, item, entry, action) {
-      // 计数与动作并发：计数失败只提示，不阻塞动作、不回滚
-      API.clickItem(objectId, item.id, item.type, entry ? entry.id : "")
-        .catch(function (e) { setNote("点击记录失败（动作仍执行）：" + msg(e)); });
-      action();
+    function clickThenAct(objectId, item, entry, action, onError, onTracked) {
+      // 先发记录请求，但绝不等待它才导航；两边的失败各自显示。
+      try {
+        Promise.resolve(API.clickItem(objectId, item.id, item.type, entry ? entry.id : ""))
+          .then(function () { if (onTracked) onTracked(); })
+          .catch(function (e) { if (onError) onError("点击记录失败（仍继续打开）：" + msg(e)); });
+      } catch (e) {
+        if (onError) onError("点击记录失败（仍继续打开）：" + msg(e));
+      }
+      try { action(); }
+      catch (e) { if (onError) onError("打开失败：" + msg(e)); }
     }
 
     // ---------------------------------------------------------------- 单项行
@@ -79,16 +85,21 @@
       var rec = props.record || {};
       var [busy, setBusy] = useState(false);
       var [openErr, setOpenErr] = useState(null);
+      function track(action) {
+        setOpenErr(null);
+        clickThenAct(objectId, item, entry, action,
+          function (error) { setOpenErr(error); }, props.onTracked);
+      }
 
       function openPaper() {
-        clickThenAct(objectId, item, entry, function () {
+        track(function () {
           window.open("zotero://select/library/items/" + item.itemKey, "_blank");
         });
       }
       function openRepo() {
         if (item.local_path) {
           setBusy(true); setOpenErr(null);
-          clickThenAct(objectId, item, entry, function () {
+          track(function () {
             API.openRepo(objectId, { item_id: item.id })
               .then(function (r) {
                 if (r && r.status !== "ok") setOpenErr((r && r.error) || "打开失败");
@@ -97,11 +108,11 @@
               .then(function () { setBusy(false); });
           });
         } else {
-          clickThenAct(objectId, item, entry, function () { window.open(item.url, "_blank"); });
+          track(function () { window.open(item.url, "_blank", "noopener,noreferrer"); });
         }
       }
       function openLink() {
-        clickThenAct(objectId, item, entry, function () { window.open(item.url, "_blank"); });
+        track(function () { window.open(item.url, "_blank", "noopener,noreferrer"); });
       }
 
       var label, onClick, busyTag;
@@ -128,7 +139,7 @@
         h("div", { className: NS + "-item-main" },
           busyTag,
           h("span", { className: NS + "-item-name", title: label }, label),
-          h("span", { className: NS + "-item-meta" },
+            h("span", { className: NS + "-item-meta" },
             "点击 " + (rec.count || 0) +
             (rec.last_at ? " · 最近 " + String(rec.last_at).slice(5, 16).replace("T", " ") : "")),
         h("div", { className: NS + "-item-act" },
@@ -169,6 +180,12 @@
 
       function clone() {
         if (!picked) return;
+        var provider = picked.provider || (picked.url.indexOf("huggingface") >= 0 ? "huggingface" : "github");
+        if ((entry.items || []).some(function (it) { return it.type === "repo" && it.provider === provider; })) {
+          setError("此子条目已有一个 " + (provider === "github" ? "GitHub" : "Hugging Face") + " 仓库；先删除它再下载候选。");
+          return;
+        }
+        if (!window.confirm("确认将 " + picked.url + " 克隆到此 study 项目的 code/ 目录？")) return;
         setPhase("cloning"); setError(null); setNote(null);
         API.cloneRepo(objectId, {
           provider: picked.provider || (picked.url.indexOf("huggingface") >= 0 ? "huggingface" : "github"),
@@ -182,7 +199,7 @@
               API.saveStudyEntry(objectId, {
                 entry_id: entry.id,
                 add_items: [{
-                  type: "repo", provider: picked.provider || "github", url: picked.url,
+                  type: "repo", provider: provider, url: picked.url,
                   local_path: r.path, cloned_at: r.cloned_at,
                 }],
               })
@@ -249,6 +266,9 @@
       var objectId = props.objectId, entry = props.entry;
       var [kind, setKind] = useState("zotero");
       var [zoteroItems, setZoteroItems] = useState([]);
+      var [zoteroCollection, setZoteroCollection] = useState("");
+      var [zoteroCollectionKey, setZoteroCollectionKey] = useState("");
+      var [zoteroChoices, setZoteroChoices] = useState([]);
       var [key, setKey] = useState("");
       var [title, setTitle] = useState("");
       var [url, setUrl] = useState("");
@@ -256,16 +276,36 @@
       var [err, setErr] = useState(null);
       var [busy, setBusy] = useState(false);
 
-      // 拉对象已登记 collection 的条目，供论文选择器
+      // 论文选择只来自显式登记或项目同名的 Zotero collection。
       useEffect(function () {
-        setZoteroItems([]); setKey("");
+        setZoteroItems([]); setKey(""); setZoteroCollection("");
+        setZoteroCollectionKey(""); setZoteroChoices([]);
+        setErr(null);
         API.links(objectId)
           .then(function (d) {
-            var z = (d && d.zotero) || {};
-            setZoteroItems(z.items || []);
-          })
-          .catch(function () { setZoteroItems([]); });
+            var z = (d && d.zotero) || {}, resolution = z.resolution || {};
+            var choices = resolution.choices || [];
+            setZoteroChoices(choices);
+            var selected = resolution.collection;
+            if (selected) setZoteroCollectionKey(selected.key);
+            else if (resolution.status === "ambiguous") return;
+            else { setErr(resolution.error || "请先在 Zotero 设置中登记 collection"); return; }
+            setZoteroCollection(selected.name + " [" + selected.key + "]");
+            return API.zoteroCollection(selected.key).then(function (collection) {
+              setZoteroItems(collection.items || []);
+            });
+          }).catch(function (e) { setErr("读取 Zotero collection 失败：" + msg(e)); });
       }, [objectId]);
+
+      function selectZoteroCollection(k) {
+        setZoteroCollectionKey(k); setKey(""); setZoteroItems([]);
+        if (!k) return;
+        API.zoteroCollection(k).then(function (collection) {
+          setZoteroItems(collection.items || []);
+          var c = zoteroChoices.filter(function (x) { return x.key === k; })[0];
+          setZoteroCollection(c ? c.name + " [" + c.key + "]" : k);
+        }).catch(function (e) { setErr("读取 Zotero collection 失败：" + msg(e)); });
+      }
 
       function reset() { setKey(""); setTitle(""); setUrl(""); setErr(null); }
 
@@ -273,11 +313,21 @@
         setErr(null);
         var item;
         if (kind === "zotero") {
+          if ((entry.items || []).some(function (it) { return it.type === "zotero"; })) {
+            setErr("每个子条目最多一个 Zotero 论文；请先删除已有论文"); return;
+          }
           var k = key.trim().toUpperCase();
-          if (!KEY_RE.test(k)) { setErr("Zotero key 必须 8 位大写字母数字"); return; }
+          if (!zoteroCollectionKey) { setErr("请先选择有效的 Zotero collection"); return; }
+          if (!KEY_RE.test(k) || !zoteroItems.some(function (it) { return it.key === k; })) {
+            setErr("请从当前配置的 Zotero collection 中选择论文"); return;
+          }
           item = { type: "zotero", itemKey: k };
+          if (zoteroChoices.length > 1 && !((zoteroChoices.length === 1) && zoteroChoices[0].key === ((props.links || {}).configured_key))) item.collectionKey = zoteroCollectionKey;
           if (title.trim()) item.title = title.trim();
         } else if (kind === "repo") {
+          if ((entry.items || []).some(function (it) { return it.type === "repo" && it.provider === provider; })) {
+            setErr("每个子条目最多一个 " + (provider === "github" ? "GitHub" : "Hugging Face") + " 仓库；请先删除已有仓库"); return;
+          }
           var u = url.trim();
           if (provider === "github" && !isGithub(u)) { setErr("GitHub 仓库需 https://github.com/<owner>/<repo>"); return; }
           if (provider === "huggingface" && !isHf(u)) { setErr("HF 仓库需 https://huggingface.co/<owner>/<repo>"); return; }
@@ -298,20 +348,23 @@
       var fields;
       if (kind === "zotero") {
         fields = h("div", { className: NS + "-form" },
-          h("label", null, "从已登记 collection 挑选"),
+          zoteroChoices.length > 1 ? h("label", null, "同名 collection 有多个，请选择路径") : null,
+          zoteroChoices.length > 1 ? h("select", {
+            className: NS + "-select", value: zoteroCollectionKey,
+            onChange: function (e) { selectZoteroCollection(e.target.value); },
+          }, h("option", { value: "" }, "（选择 collection）"), zoteroChoices.map(function (c) {
+            var parent = c.parent && zoteroChoices.filter(function (x) { return x.key === c.parent; })[0];
+            return h("option", { key: c.key, value: c.key }, (c.path || (parent ? parent.name + " / " : "") + c.name) + " [" + c.key + "]");
+          })) : null,
+          h("label", null, "当前 collection " + (zoteroCollection || "（未找到；请配置 collection）")),
           h("select", {
             className: NS + "-select", value: key,
             onChange: function (e) { setKey(e.target.value); },
           },
-            h("option", { value: "" }, "（手填 8 位 key）"),
+            h("option", { value: "" }, zoteroCollection ? "（选择论文）" : "（先配置 collection）"),
             zoteroItems.map(function (it) {
               return h("option", { key: it.key, value: it.key }, it.title + "  [" + it.key + "]");
             })),
-          h("label", null, "或手填 Zotero key"),
-          h("input", {
-            className: NS + "-input", value: key, placeholder: "8 位大写，如 ABCD1234",
-            onChange: function (e) { setKey(e.target.value); },
-          }),
           h("label", null, "标题（可选）"),
           h("input", {
             className: NS + "-input", value: title,
@@ -406,7 +459,7 @@
             ? h("ul", { className: NS + "-itemlist" }, items.map(function (it) {
                 return h(ItemRow, {
                   key: it.id, item: it, entry: entry, objectId: objectId,
-                  record: (records.items || {})[it.id],
+                  record: (records.items || {})[it.id], onTracked: props.onTracked,
                   onDelete: function () { delItem(it.id); },
                 });
               }))
@@ -512,6 +565,7 @@
               ? entries.map(function (e) {
                   return h(EntryDetail, {
                     key: e.id, entry: e, objectId: objectId, records: records, onDone: reload,
+                    onTracked: reload,
                   });
                 })
               : h(Empty, { title: "还没有子条目",

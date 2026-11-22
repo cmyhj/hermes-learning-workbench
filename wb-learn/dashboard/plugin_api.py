@@ -492,9 +492,15 @@ def study_click_item(payload: Dict[str, Any] = Body(...)) -> Dict[str, Any]:
         raise _bad("缺少 item_id")
     item_type = payload.get("item_type")
     entry_id = payload.get("entry_id")
+    entries = _guard(study.get_entries, object_id)
+    entry = next((e for e in entries if e.get("id") == entry_id), None)
+    item = next((i for i in (entry or {}).get("items", []) if i.get("id") == item_id), None)
+    if item is None:
+        raise _bad("item 不属于指定子条目", 404)
+    if item_type and item.get("type") != item_type:
+        raise _bad("item 类型与存储记录不一致")
     rec = _guard(records.record_click, object_id, item_id,
-                 item_type=item_type if isinstance(item_type, str) else None,
-                 entry_id=entry_id if isinstance(entry_id, str) else None)
+                 item_type=item.get("type"), entry_id=entry.get("id"))
     return {"ok": True, "record": rec}
 
 

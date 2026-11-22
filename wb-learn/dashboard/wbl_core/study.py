@@ -134,10 +134,16 @@ def object_root(object_id: str) -> Path:
 
 
 # ---------------------------------------------------------------- item 校验
-def _validate_zotero_item(raw: Dict[str, Any]) -> Dict[str, Any]:
+def _validate_zotero_item(raw: Dict[str, Any], object_id: str) -> Dict[str, Any]:
     item_key = str(raw.get("itemKey") or raw.get("item_key") or "").strip().upper()
     if not _COLLECTION_KEY_RE.match(item_key):
         raise paths.PathNotAllowed("Zotero item key 形状非法（8 位大写字母数字）")
+    selection = links.resolve_study_collection(object_id, requested_key=raw.get("collectionKey"))
+    collection = selection.get("collection")
+    if not collection:
+        raise paths.PathNotAllowed(selection.get("error") or "当前无法解析 Zotero collection")
+    if not links.zotero_item_in_collection(item_key, collection["key"]):
+        raise paths.PathNotAllowed("所选 Zotero 论文不属于当前 study 的有效 collection")
     title = raw.get("title")
     out = {"id": _new_id("i"), "type": "zotero", "itemKey": item_key}
     if isinstance(title, str) and title.strip():
@@ -219,13 +225,15 @@ def _validate_link_item(raw: Dict[str, Any], kind: str) -> Dict[str, Any]:
     return out
 
 
-def normalize_item(raw: Any) -> Dict[str, Any]:
+def normalize_item(raw: Any, object_id: Optional[str] = None) -> Dict[str, Any]:
     """把一条原始 item 归一成带 id 的标准形状；类型非法则拒绝。"""
     if not isinstance(raw, dict):
         raise paths.PathNotAllowed("item 必须是对象")
     kind = str(raw.get("type") or "").strip()
     if kind == "zotero":
-        return _validate_zotero_item(raw)
+        if object_id is None:
+            raise paths.PathNotAllowed("Zotero 论文校验需要 study 对象 id")
+        return _validate_zotero_item(raw, _check_object(object_id))
     if kind == "repo":
         return _validate_repo_item(raw)
     if kind == "videos":
@@ -235,14 +243,29 @@ def normalize_item(raw: Any) -> Dict[str, Any]:
     raise paths.PathNotAllowed(f"未知 item 类型：{kind!r}（只接受 {ITEM_TYPES}）")
 
 
-def _normalize_items(raw_items: Any) -> List[Dict[str, Any]]:
+def _normalize_items(raw_items: Any, object_id: str) -> List[Dict[str, Any]]:
     if raw_items is None:
         return []
     if not isinstance(raw_items, list):
         raise paths.PathNotAllowed("items 必须是数组")
     if len(raw_items) > 200:
         raise paths.PathNotAllowed("单条目 items 最多 200 条")
-    return [normalize_item(it) for it in raw_items]
+    items = [normalize_item(it, object_id) for it in raw_items]
+    _validate_cardinality(items)
+    return items
+
+
+def _validate_cardinality(items: List[Dict[str, Any]]) -> None:
+    """Enforce one paper, one repo per provider, with unbounded links."""
+    counts: Dict[str, int] = {}
+    for item in items:
+        key = ("repo:" + str(item.get("provider"))) if item.get("type") == "repo" else str(item.get("type"))
+        counts[key] = counts.get(key, 0) + 1
+    limits = {"zotero": 1, "repo:github": 1, "repo:huggingface": 1}
+    labels = {"zotero": "Zotero 论文", "repo:github": "GitHub 仓库", "repo:huggingface": "Hugging Face 仓库"}
+    for key, limit in limits.items():
+        if counts.get(key, 0) > limit:
+            raise paths.PathNotAllowed(f"每个子条目最多添加一个{labels[key]}；请先删除已有项再添加")
 
 
 # ---------------------------------------------------------------- 条目读写
@@ -270,7 +293,7 @@ def create_entry(object_id: str, title: str,
     _check_object(object_id)
     if not isinstance(title, str) or not title.strip():
         raise paths.PathNotAllowed("子条目标题必填")
-    norm_items = _normalize_items(items)
+    norm_items = _normalize_items(items, object_id)
     entry = {
         "id": _new_id("e"),
         "title": title.strip()[:200],
@@ -320,10 +343,12 @@ def update_entry(object_id: str, entry_id: str, *,
             else:
                 raise paths.PathNotAllowed("note 必须是字符串")
         if items is not None:
-            entry["items"] = _normalize_items(items)
+            entry["items"] = _normalize_items(items, object_id)
         if add_items is not None:
-            extra = _normalize_items(add_items)
-            entry.setdefault("items", []).extend(extra)
+            extra = _normalize_items(add_items, object_id)
+            combined = list(entry.get("items") or []) + extra
+            _validate_cardinality(combined)
+            entry["items"] = combined
         entry["updated_at"] = _now()
         save_all(data)
     return entry

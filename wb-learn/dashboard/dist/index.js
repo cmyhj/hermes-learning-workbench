@@ -41,8 +41,8 @@
     { id: "quiz", label: "题库 / 刷题" },
     { id: "materials", label: "材料" },
     { id: "notes", label: "笔记" },
-    { id: "links", label: "关联（Zotero / GitHub）" },
     { id: "study", label: "子条目" },
+    { id: "links", label: "Zotero 设置" },
   ];
 
   // ---------------------------------------------------------------- 资产装载
@@ -367,7 +367,7 @@
     var V = parts.VIEWS;
     var visibleTabs = current && current.kind === "course"
       ? TABS.filter(function (t) { return t.id === "quiz" || t.id === "materials" || t.id === "notes"; })
-      : TABS.filter(function (t) { return t.id === "study" || t.id === "materials" || t.id === "links"; });
+      : TABS.filter(function (t) { return t.id === "study" || t.id === "links"; });
     var activeTab = visibleTabs.some(function (t) { return tab === t.id; }) ? tab : "study";
     var tabs = h("nav", { className: NS + "-tabs" }, visibleTabs.map(function (t) {
       return h("button", {
@@ -405,7 +405,7 @@
             hint: "当前是课程对象。课程的知识组织走「题库 / 刷题」「材料」「笔记」三个标签。",
           });
     } else {
-      body = h(parts.LINKS.LinksPanel, { objectId: current.id });
+      body = h(parts.LINKS.LinksPanel, { objectId: current.id, configOnly: current.kind === "study" });
     }
 
     var chatColumn = (!narrow && chatOpen && chatComp) ? chatPanel(NS + "-chatcol", false) : null;
@@ -433,6 +433,10 @@
             h("p", { className: NS + "-subtitle" },
               current ? (current.kind === "course" ? "课程 · " : "自主学习 · ") + current.path
                       : "选择左侧对象")),
+          h("select", { className: NS + "-mobile-object-picker", value: selected || "",
+            "aria-label": "选择学习对象", onChange: function (e) { selectObject(e.target.value); } },
+            data.objects.map(function (o) { return h("option", { key: o.id, value: o.id },
+              (o.kind === "course" ? "课程 · " : "自主学习 · ") + o.name); })),
           h("div", { className: NS + "-head-actions" },
             !narrow ? h("button", {
               className: NS + "-btn " + NS + "-btn-quiet",
