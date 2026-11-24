@@ -87,13 +87,13 @@
       var [openErr, setOpenErr] = useState(null);
       var [reading, setReading] = useState(false);
 
-      // 送阅读：只读元数据 → TextFold 折读；拿到 pid 就打开，生成在后台继续
+      // TextFold折叠阅读：只读元数据 → TextFold 折读；拿到 pid 就打开，生成在后台继续
       function sendReading() {
         if (reading) return;
         setReading(true); setOpenErr(null);
         API.readPaper(item.itemKey, "zh")
           .then(function (res) {
-            if (!res || !res.ok) { setReading(false); setOpenErr((res && res.error) || "送阅读失败"); return; }
+            if (!res || !res.ok) { setReading(false); setOpenErr((res && res.error) || "TextFold折叠阅读失败"); return; }
             var job = res.job || {}, pid = res.paper || job.pid;
             var openReader = function () {
               window.open("http://127.0.0.1:3017/p/" + encodeURIComponent(pid) + "?lang=zh",
@@ -176,7 +176,7 @@
             disabled: reading,
             title: "交给 TextFold 按 1–5 级折读",
             onClick: sendReading,
-          }, reading ? "送阅读中…" : "送阅读") : null,
+          }, reading ? "折叠中…" : "TextFold折叠阅读") : null,
           h("button", {
             className: NS + "-btn " + NS + "-btn-quiet", disabled: busy, onClick: onClick,
           }, item.type === "repo" && item.local_path ? "VSCode 打开" : "打开"),

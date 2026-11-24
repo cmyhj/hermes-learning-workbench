@@ -27,7 +27,7 @@
       var [reading, setReading] = useState(null);      // 正在送 TextFold 的条目 key
       var [readNote, setReadNote] = useState(null);
 
-      // 送阅读：只读 Zotero 元数据 → 交给 TextFold 生成 → 完成后打开阅读器
+      // TextFold折叠阅读：只读 Zotero 元数据 → 交给 TextFold 生成 → 完成后打开阅读器
       function sendReading(it) {
         if (reading) return;
         setReading(it.key); setReadNote(null);
@@ -125,7 +125,7 @@
                         disabled: !!reading,
                         title: "交给 TextFold 按 1–5 级折读（按 DOI/arXiv 取线上版本）",
                         onClick: function () { sendReading(it); },
-                      }, reading === it.key ? "发送中…" : "送阅读"));
+                      }, reading === it.key ? "折叠中…" : "TextFold折叠阅读"));
                   }))
                 : h("p", { className: NS + "-sidehint" }, "这个集合里没有条目。"),
               readNote ? h("p", { className: NS + "-sidehint" }, readNote) : null)
