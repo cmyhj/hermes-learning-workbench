@@ -25,6 +25,7 @@ Hermes Agent 的**学习区插件**（`wb-learn`）：课程 / 自主学习对�
 |---|---|---|---|---|
 | 项目 | [hermes-project-workbench](https://github.com/cmyhj/hermes-project-workbench) | **ProjectManager** | <https://github.com/AlicDanclic/ProjectManager> | `.pm` 项目数据模型（任务/里程碑/看板/甘特）、默认极简的页面组织；MIT |
 | 学习 | [hermes-learning-workbench](https://github.com/cmyhj/hermes-learning-workbench) | **Shiroha Quiz** | <https://github.com/reiqr/shiroha-quiz> | 题库数据形状、题型枚举、多选/判断/多空/简答的判分语义；GPL-3.0（未复制代码） |
+| 学习 | 同上 | **`/teach`（Hermes 教学技能）** | <https://hermes-agent.nousresearch.com/docs/guides/work-with-skills> | 课程工作区约定（`MISSION.md`/`RESOURCES.md`/`NOTES.md`/`lessons/`/`reference/`/`assets/`/`learning-records/`）与「子条目 `course/`」布局；调用方式：在对象对话里发 `/teach <主题>` |
 | 游戏 | [hermes-game-workbench](https://github.com/cmyhj/hermes-game-workbench) | **AUTO-MAS** | <https://github.com/AUTO-MAS-Project/AUTO-MAS> | MCP 只读工具、历史记录字段与 `+04:00` 时间语义、脚本/账号配置结构；AGPL-3.0 |
 | 游戏 | 同上 | **March7thAssistant (M7A)** | <https://github.com/moesnow/March7thAssistant> | `installs.json` 注册表、`logs/runs/*.json` 与 `开拓力` 日志行形状；GPL-3.0 |
 | 游戏 | 同上 | **ZenlessZoneZero-OneDragon** | <https://github.com/OneDragon-Anything/ZenlessZoneZero-OneDragon> | 原生 `log.txt*` 完成/失败行与 `剩余电量` 读数形状；GPL-3.0 |
@@ -34,6 +35,29 @@ Hermes Agent 的**学习区插件**（`wb-learn`）：课程 / 自主学习对�
 许可说明：AUTO-MAS（AGPL-3.0）、M7A（GPL-3.0）、OneDragon（GPL-3.0）、Shiroha Quiz（GPL-3.0）
 都**允许**复用，约束是 copyleft。本项目为避免整体改换许可，只做接口/格式兼容与自行实现，
 没有复制其源码；若将来要嵌入，相应部分必须按其许可分发。
+
+### 与 `/teach` 的调用配合
+
+`/teach` 是 Hermes 自带的教学技能（`$HERMES_HOME/skills/teach/`，Windows 默认
+`%LOCALAPPDATA%\hermes\skills\teach`；装好后自动成为斜杠命令）。
+wb-learn **不复制它的实现**，只约定工作区形状，让教学产物直接成为学习材料：
+
+- 一个自主学习对象 = 一个教学单元。推荐布局 `<项目>/<子条目>/{code,course}`
+  （技能里的约定写作 `E:/Study/<项目>/<子条目>/course/`；插件默认学习根同为 `E:/Study`，
+  可用 `WB_LEARN_STUDY_ROOT` 覆盖）；
+  `course/` 就是 `/teach` 的工作区：`MISSION.md`、`RESOURCES.md`、`NOTES.md`、
+  `lessons/`、`reference/`、`assets/`、`learning-records/`。
+- 在 wb-learn 的对象对话里直接发 `/teach <主题>`。该对话的 `cwd` 就是对象真实目录，
+  所以教学产物落在同一目录，刷新后作为材料出现在列表里。
+- wb-learn 只读展示课程文件，不写 `MISSION.md` / `lessons/`；题库写入仍只走 `quiz-library/`。
+
+调用示例：
+
+```text
+/teach diffusion policy 的训练循环
+```
+
+技能说明与斜杠命令机制：<https://hermes-agent.nousresearch.com/docs/guides/work-with-skills>
 
 ---
 
