@@ -31,7 +31,7 @@
 | POST | ``/study/entries`` | **写**：新建/更新子条目（含各类 item） |
 | DELETE | ``/study/entries`` | **写**：删子条目或单项（必须 ``confirm=true``） |
 | POST | ``/study/items/resolve-repo`` | 从论文找代码仓库候选（只读搜索，不自动选定/克隆） |
-| POST | ``/study/items/clone-repo`` | **写**：用户确认后克隆到 ``<对象根>/code/`` |
+| POST | ``/study/items/clone-repo`` | **写**：用户确认后克隆到 ``<对象根>/<子条目>/code/`` |
 | POST | ``/study/items/open`` | 用 VSCode 打开已克隆仓库（仅对象根内 git 仓库） |
 | POST | ``/study/items/click`` | **写**：记录点击次数（学习记录） |
 | GET | ``/study/records`` | 对象级学习记录汇总 |
@@ -47,12 +47,16 @@
 
 from __future__ import annotations
 
+import base64
 import json
+import mimetypes
+import re
 import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Body, HTTPException, Query
+from fastapi.responses import FileResponse, HTMLResponse
 
 # ── 内核包导入（在 Hermes 的插件隔离里也必须成立）──────────────────────────
 #
@@ -157,6 +161,15 @@ def _object_id(value: Optional[str]) -> str:
     return value
 
 
+def _entry_name_of(payload: Dict[str, Any]) -> Optional[str]:
+    """克隆时用到的子条目目录名（单段名，最终仍由 paths.safe_child_name 校验）。"""
+    name = payload.get("entry_name")
+    if not isinstance(name, str):
+        return None
+    name = name.strip()
+    return name or None
+
+
 # --------------------------------------------------------------------------
 # 概览
 # --------------------------------------------------------------------------
@@ -192,6 +205,30 @@ def create_object(payload: Dict[str, Any] = Body(...)) -> Dict[str, Any]:
     return _guard(catalog.create_object, payload.get("kind"), payload.get("name"))
 
 
+@router.get("/study/layout")
+def study_layout(id: str = Query(..., max_length=140)) -> Dict[str, Any]:
+    object_id = _object_id(id)
+    if not object_id.startswith("study:"): raise _bad("只接受 study: 前缀")
+    data = _guard(catalog.study_layout, object_id)
+    # 课程内嵌用：路径式静态资源前缀（前端据此拼 iframe URL，相对引用才能解析）
+    files_base = "/api/plugins/wb-learn/study/files/" + _object_token(object_id) + "/"
+    data["files_base"] = files_base
+    for entry in data.get("entries") or []:
+        entry["files_base"] = files_base
+    return data
+
+
+@router.post("/study/layout/scaffold")
+def scaffold_study_layout(payload: Dict[str, Any] = Body(...)) -> Dict[str, Any]:
+    object_id = _object_id(payload.get("object_id"))
+    if not object_id.startswith("study:"): raise _bad("只接受 study: 前缀")
+    entry = payload.get("entry")
+    if not isinstance(entry, str) or not entry:
+        raise _bad("缺少 entry 子条目名称")
+    result = _guard(catalog.scaffold_study, object_id, entry)
+    return {"ok": True, **result}
+
+
 @router.get("/object")
 def object_detail(id: str = Query(..., max_length=140)) -> Dict[str, Any]:
     object_id = _object_id(id)
@@ -224,6 +261,131 @@ def material_list(id: str = Query(..., max_length=140),
 def material_preview(id: str = Query(..., max_length=140),
                      path: str = Query(..., max_length=400)) -> Dict[str, Any]:
     return _guard(materials.preview, _object_id(id), path)
+
+
+@router.get("/materials/raw")
+def material_raw(id: str = Query(..., max_length=140),
+                 path: str = Query(..., max_length=400),
+                 download: bool = Query(False)):
+    """Serve safe preview bytes only for registered object files; other formats download."""
+    object_id = _object_id(id)
+    obj = _guard(catalog.get_object, object_id)
+    if obj is None:
+        raise _bad("未知学习对象", 404)
+    root = catalog.object_dir(object_id)
+    node = _guard(materials._resolve_file, root, path)
+    ext = node.suffix.lower()
+    inline_types = {".pdf": "application/pdf", ".png": "image/png", ".jpg": "image/jpeg",
+                    ".jpeg": "image/jpeg", ".gif": "image/gif", ".webp": "image/webp",
+                    ".bmp": "image/bmp", ".tif": "image/tiff", ".tiff": "image/tiff"}
+    parts = Path(path).parts
+    course_lesson_html = (object_id.startswith("study:") and ext == ".html"
+                          and ((len(parts) == 4 and parts[1:3] == ("course", "lessons"))
+                               or (len(parts) == 3 and parts[0:2] == ("course", "lessons"))))
+    lesson_safe = False
+    if course_lesson_html:
+        try:
+            if len(parts) == 4:
+                entry_name = paths.safe_child_name(parts[0])
+                entry_root = root / entry_name
+                lesson_safe = (entry_name == parts[0] and paths.safe_under(root, entry_root) is not None
+                               and paths.safe_under(entry_root, node) is not None
+                               and node.parent.name == "lessons" and node.parent.parent.name == "course")
+            else:
+                # legacy: the project root itself is the workspace (course/lessons/<file>.html)
+                real_root = paths.safe_under(root, root, allow_root=True)
+                lesson_safe = (real_root is not None
+                               and paths.safe_under(root, node) is not None
+                               and node.parent.name == "lessons"
+                               and node.parent.parent.name == "course"
+                               and node.parent.parent.parent == real_root)
+        except paths.PathNotAllowed:
+            lesson_safe = False
+    inline = (ext in inline_types or lesson_safe) and not download
+    media = ("text/html" if lesson_safe and inline else inline_types.get(ext, "application/octet-stream"))
+    import urllib.parse
+    headers = {"X-Content-Type-Options": "nosniff",
+               "Cross-Origin-Resource-Policy": "same-origin",
+               "Content-Disposition": ("inline" if inline else "attachment") +
+                   "; filename*=UTF-8''" + urllib.parse.quote(node.name)}
+    if lesson_safe and inline:
+        headers["Content-Security-Policy"] = "sandbox allow-scripts allow-forms allow-popups allow-modals"
+    else:
+        headers["Content-Security-Policy"] = "sandbox; default-src 'none'; frame-ancestors 'self'"
+    return FileResponse(str(node), media_type=media, headers=headers)
+
+
+# --------------------------------------------------------------------------
+# 课程内嵌（路径式静态资源）
+# --------------------------------------------------------------------------
+_THEME_VALUE_RE = re.compile(r"^[#a-zA-Z0-9(),.%\s-]{1,40}$")
+
+
+def _object_token(object_id: str) -> str:
+    """把 ``study:RL`` 编成可放进 URL 路径段、能还原的 token。"""
+    return base64.urlsafe_b64encode(object_id.encode("utf-8")).decode("ascii").rstrip("=")
+
+
+def _object_from_token(token: str) -> str:
+    pad = "=" * (-len(token) % 4)
+    try:
+        return base64.urlsafe_b64decode(token + pad).decode("utf-8")
+    except Exception as exc:  # noqa: BLE001
+        raise _bad("对象 token 非法") from exc
+
+
+def _theme_css(bg: Optional[str], fg: Optional[str], accent: Optional[str],
+               mode: Optional[str]) -> str:
+    """把宿主主题色注入课程页面，让内嵌渲染跟随面板主题。"""
+    def safe(value: Optional[str], default: str) -> str:
+        return value if isinstance(value, str) and _THEME_VALUE_RE.match(value) else default
+
+    bg_c, fg_c = safe(bg, "#ffffff"), safe(fg, "#1f2328")
+    accent_c = safe(accent, "#2563eb")
+    scheme = "dark" if str(mode).lower() == "dark" else "light"
+    return (
+        '<style id="wb-theme">'
+        f":root{{color-scheme:{scheme};}}"
+        f"html{{background:{bg_c};}}"
+        f"body{{background:transparent;color:{fg_c};}}"
+        f"a{{color:{accent_c};}}"
+        "</style>"
+    )
+
+
+@router.get("/study/files/{token}/{file_path:path}")
+def study_file(token: str, file_path: str,
+               bg: Optional[str] = Query(None),
+               fg: Optional[str] = Query(None),
+               accent: Optional[str] = Query(None),
+               mode: Optional[str] = Query(None)):
+    """按**路径**服务自主学习对象内的文件，让课程 HTML 的相对引用（../assets/…）可用。
+
+    ``/materials/raw`` 走 query 参数，相对路径解析不了，课程会掉样式和 quiz 脚本，
+    所以内嵌必须用这种路径式 URL。
+
+    主题参数刻意**不设长度上限**：宿主主题可能是 ``color-mix(...)`` 这类长表达式，
+    设上限会让整节课 422、页面只剩一段 JSON。这里一律走 ``_theme_css`` 的白名单，
+    不合规就退回默认色，页面照常渲染。
+    """
+    object_id = _object_id(_object_from_token(token))
+    if not object_id.startswith("study:"):
+        raise _bad("只接受 study: 对象")
+    root = catalog.object_dir(object_id)
+    node = _guard(materials._resolve_file, root, file_path)
+    if node.suffix.lower() in (".html", ".htm"):
+        text = node.read_text(encoding="utf-8", errors="replace")
+        css = _theme_css(bg, fg, accent, mode)
+        text = text.replace("</head>", css + "</head>", 1) if "</head>" in text else css + text
+        return HTMLResponse(text, headers={
+            "Content-Security-Policy": "sandbox allow-scripts allow-forms allow-popups allow-modals",
+            "X-Content-Type-Options": "nosniff",
+        })
+    media = mimetypes.guess_type(node.name)[0] or "application/octet-stream"
+    return FileResponse(str(node), media_type=media, headers={
+        "X-Content-Type-Options": "nosniff",
+        "Cross-Origin-Resource-Policy": "same-origin",
+    })
 
 
 @router.get("/notes/files")
@@ -450,7 +612,8 @@ def study_clone_repo(payload: Dict[str, Any] = Body(...)) -> Dict[str, Any]:
     url = payload.get("url")
     if not isinstance(url, str) or not url.strip():
         raise _bad("缺少 url")
-    result = _guard(repo_ops.clone_repo, object_id, provider, url)
+    result = _guard(repo_ops.clone_repo, object_id, provider, url,
+                    _entry_name_of(payload))
     # 克隆成功后回写 item 的克隆状态（若给了 entry_id + item_id）
     entry_id = payload.get("entry_id")
     item_id = payload.get("item_id")
