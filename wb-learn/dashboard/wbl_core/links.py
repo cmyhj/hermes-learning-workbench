@@ -22,6 +22,7 @@ import os
 import re
 import shutil
 import subprocess
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -470,6 +471,41 @@ def _textfold(path: str, payload: Optional[Dict[str, Any]] = None, timeout: floa
         return None, "TextFold 返回的不是 JSON"
 
 
+TEXTFOLD_PY = os.environ.get("WB_LEARN_TEXTFOLD_PY") or r"D:\DevTool	extfold-venv\Scripts\python.exe"
+TEXTFOLD_LOG = os.environ.get("WB_LEARN_TEXTFOLD_LOG") or r"D:\DevTool	extfold-serve.log"
+
+
+def _textfold_alive() -> bool:
+    try:
+        _textfold("/api/models", timeout=5)
+        return True
+    except Exception:
+        return False
+
+
+def ensure_textfold() -> bool:
+    """没在跑就把 TextFold 拉起来（独立进程）。用于「送阅读」的前置检查。"""
+    if _textfold_alive():
+        return True
+    if not os.path.isfile(TEXTFOLD_PY):
+        return False
+    flags = 0
+    if os.name == "nt":
+        flags = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0) | getattr(subprocess, "DETACHED_PROCESS", 0)
+    try:
+        os.makedirs(os.path.dirname(TEXTFOLD_LOG) or ".", exist_ok=True)
+        log = open(TEXTFOLD_LOG, "ab")
+        subprocess.Popen([TEXTFOLD_PY, "-m", "textfold", "serve"], stdout=log, stderr=log,
+                         stdin=subprocess.DEVNULL, creationflags=flags)
+    except OSError:
+        return False
+    for _ in range(25):
+        time.sleep(0.8)
+        if _textfold_alive():
+            return True
+    return False
+
+
 def _paper_ref(item: Dict[str, Any]) -> Tuple[Optional[str], Optional[str]]:
     """条目 → (引用串, 类型)：优先 DOI，其次 extra 或 url 里的 arXiv 号。"""
     inner = (item or {}).get("data") or {}
@@ -546,6 +582,8 @@ def zotero_read(key: str, *, lang: str = "zh") -> Dict[str, Any]:
     if not _COLLECTION_KEY_RE.match((key or "").upper()):
         raise paths.PathNotAllowed("Zotero key 形状非法")
     key = key.upper()
+    if not ensure_textfold():
+        return {"ok": False, "error": "TextFold 启动失败：检查 D:\DevTool\textfold-venv 与 3017 端口"}
     data, error = _zotero_get(f"items/{key}")
     if error:
         return {"ok": False, "error": error}

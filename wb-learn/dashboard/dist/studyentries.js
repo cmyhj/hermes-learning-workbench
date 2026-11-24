@@ -85,6 +85,34 @@
       var rec = props.record || {};
       var [busy, setBusy] = useState(false);
       var [openErr, setOpenErr] = useState(null);
+      var [reading, setReading] = useState(false);
+
+      // 送阅读：只读元数据 → TextFold 折读；拿到 pid 就打开，生成在后台继续
+      function sendReading() {
+        if (reading) return;
+        setReading(true); setOpenErr(null);
+        API.readPaper(item.itemKey, "zh")
+          .then(function (res) {
+            if (!res || !res.ok) { setReading(false); setOpenErr((res && res.error) || "送阅读失败"); return; }
+            var job = res.job || {}, pid = res.paper || job.pid;
+            var openReader = function () {
+              window.open("http://127.0.0.1:3017/p/" + encodeURIComponent(pid) + "?lang=zh",
+                "_blank", "noopener");
+            };
+            if (pid) { openReader(); setReading(false); }
+            if (!job.id) { if (!pid) setReading(false); return; }
+            var tick = function () {
+              API.readJob(job.id).then(function (r) {
+                if (!r || !r.ok) { setTimeout(tick, 2000); return; }
+                if (r.job.status === "done") { if (!pid) openReader(); setReading(false); }
+                else if (r.job.status === "error") { setReading(false); setOpenErr("生成失败：" + (r.job.error || "")); }
+                else setTimeout(tick, 2000);
+              }).catch(function () { setTimeout(tick, 2000); });
+            };
+            tick();
+          })
+          .catch(function (e) { setReading(false); setOpenErr(msg(e)); });
+      }
       function track(action) {
         setOpenErr(null);
         clickThenAct(objectId, item, entry, action,
@@ -143,6 +171,12 @@
             "点击 " + (rec.count || 0) +
             (rec.last_at ? " · 最近 " + String(rec.last_at).slice(5, 16).replace("T", " ") : "")),
         h("div", { className: NS + "-item-act" },
+          item.type === "zotero" ? h("button", {
+            className: NS + "-btn " + NS + "-btn-quiet",
+            disabled: reading,
+            title: "交给 TextFold 按 1–5 级折读",
+            onClick: sendReading,
+          }, reading ? "送阅读中…" : "送阅读") : null,
           h("button", {
             className: NS + "-btn " + NS + "-btn-quiet", disabled: busy, onClick: onClick,
           }, item.type === "repo" && item.local_path ? "VSCode 打开" : "打开"),

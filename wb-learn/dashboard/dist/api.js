@@ -126,6 +126,11 @@
         });
       },
       studyRecords: function (id) { return get("/study/records", { id: id }); },
+      // TextFold：把一条 Zotero 文献送进折读（只读 Zotero，不写回）
+      readPaper: function (key, lang) {
+        return send("POST", "/zotero/read", { key: key, lang: lang || "zh" });
+      },
+      readJob: function (jobId) { return get("/zotero/job", { job: jobId }); },
     };
   }
 
