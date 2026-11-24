@@ -42,16 +42,19 @@
             return;
           }
           var job = res.job || {};
+          var pid = res.paper || job.pid;
           var openReader = function () {
-            window.open("http://127.0.0.1:3017/p/" + encodeURIComponent(res.paper || job.pid) + "?lang=zh",
+            window.open("http://127.0.0.1:3017/p/" + encodeURIComponent(pid) + "?lang=zh",
               "_blank", "noopener");
           };
-          if (!job.id) { openReader(); setReading(null); return; }
+          // 立刻打开阅读器：边生成边读，不用等全部层级
+          if (pid) { openReader(); setReading(null); }
+          if (!job.id) { if (!pid) setReading(null); return; }
           var tick = function () {
             SDK.fetchJSON("/api/plugins/wb-learn/zotero/job?job=" + encodeURIComponent(job.id))
               .then(function (r) {
                 if (!r || !r.ok) { setTimeout(tick, 2000); return; }
-                if (r.job.status === "done") { openReader(); setReading(null); }
+                if (r.job.status === "done") { if (!pid) openReader(); setReading(null); }
                 else if (r.job.status === "error") { setReading(null); setReadNote("生成失败：" + (r.job.error || "")); }
                 else setTimeout(tick, 2000);
               })
