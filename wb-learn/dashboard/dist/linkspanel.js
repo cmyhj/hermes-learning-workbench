@@ -24,6 +24,42 @@
       var [picked, setPicked] = useState(z.configured_key || "");
       var [saving, setSaving] = useState(false);
       var [note, setNote] = useState(null);
+      var [reading, setReading] = useState(null);      // 正在送 TextFold 的条目 key
+      var [readNote, setReadNote] = useState(null);
+
+      // 送阅读：只读 Zotero 元数据 → 交给 TextFold 生成 → 完成后打开阅读器
+      function sendReading(it) {
+        if (reading) return;
+        setReading(it.key); setReadNote(null);
+        SDK.fetchJSON("/api/plugins/wb-learn/zotero/read", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ key: it.key, lang: "zh" }),
+        }).then(function (res) {
+          if (!res || !res.ok) {
+            setReading(null);
+            setReadNote((res && res.error) || "发送失败");
+            return;
+          }
+          var job = res.job || {};
+          var openReader = function () {
+            window.open("http://127.0.0.1:3017/p/" + encodeURIComponent(res.paper || job.pid) + "?lang=zh",
+              "_blank", "noopener");
+          };
+          if (!job.id) { openReader(); setReading(null); return; }
+          var tick = function () {
+            SDK.fetchJSON("/api/plugins/wb-learn/zotero/job?job=" + encodeURIComponent(job.id))
+              .then(function (r) {
+                if (!r || !r.ok) { setTimeout(tick, 2000); return; }
+                if (r.job.status === "done") { openReader(); setReading(null); }
+                else if (r.job.status === "error") { setReading(null); setReadNote("生成失败：" + (r.job.error || "")); }
+                else setTimeout(tick, 2000);
+              })
+              .catch(function () { setTimeout(tick, 2000); });
+          };
+          tick();
+        }).catch(function (e) { setReading(null); setReadNote("发送失败：" + msg(e)); });
+      }
 
       useEffect(function () { setPicked(z.configured_key || ""); setNote(null); }, [z.configured_key]);
 
@@ -80,9 +116,16 @@
                     return h("li", { key: it.key },
                       h("span", { className: NS + "-refname" }, it.title),
                       h("span", { className: NS + "-filemeta" },
-                        (it.authors || []).join(", ") + (it.date ? " · " + it.date : "")));
+                        (it.authors || []).join(", ") + (it.date ? " · " + it.date : "")),
+                      h("button", {
+                        className: NS + "-btn " + NS + "-btn-quiet",
+                        disabled: !!reading,
+                        title: "交给 TextFold 按 1–5 级折读（按 DOI/arXiv 取线上版本）",
+                        onClick: function () { sendReading(it); },
+                      }, reading === it.key ? "发送中…" : "送阅读"));
                   }))
-                : h("p", { className: NS + "-sidehint" }, "这个集合里没有条目。"))
+                : h("p", { className: NS + "-sidehint" }, "这个集合里没有条目。"),
+              readNote ? h("p", { className: NS + "-sidehint" }, readNote) : null)
           : (!props.configOnly ? h("p", { className: NS + "-sidehint" }, "还没有登记 collection。只读，不写 Zotero。") : null));
     }
 

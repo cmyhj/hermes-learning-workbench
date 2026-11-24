@@ -530,6 +530,19 @@ def zotero_collection(key: str = Query(..., min_length=8, max_length=8),
     return _guard(links.zotero_collection_items, key.upper(), limit=limit)
 
 
+@router.post("/zotero/read")
+def zotero_read(payload: Dict[str, Any] = Body(...)) -> Dict[str, Any]:
+    """把一条 Zotero 文献交给 TextFold 折读（先线上 DOI/arXiv，失败再用本地 PDF 附件）。只读 Zotero，不写回。"""
+    key = str(payload.get("key") or "").strip()
+    lang = str(payload.get("lang") or "zh")
+    return _guard(links.zotero_read, key.upper(), lang=lang)
+
+
+@router.get("/zotero/job")
+def zotero_job(job: str = Query(..., min_length=4, max_length=40)) -> Dict[str, Any]:
+    return _guard(links.textfold_job, job)
+
+
 @router.get("/github/repo")
 def github_repo(repo: str = Query(..., max_length=200)) -> Dict[str, Any]:
     parsed = links.parse_github_url(repo if repo.startswith("http") else f"https://github.com/{repo}")

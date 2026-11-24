@@ -445,3 +445,145 @@ def object_links(object_id: str) -> Dict[str, Any]:
         "read_only": True,
         "policy": "只读：不写 Zotero、不 push/fetch GitHub；仓库地址只接受 github.com/<owner>/<repo>。",
     }
+
+
+# --------------------------------------------------------------------------
+# TextFold：把 Zotero 条目送进折读（1–5 级）
+# --------------------------------------------------------------------------
+TEXTFOLD_BASE = os.environ.get("WB_LEARN_TEXTFOLD_BASE") or "http://127.0.0.1:3017"
+_ARXIV_IN_EXTRA = re.compile(r"arXiv:\s*([0-9]{4}\.[0-9]{4,5}(?:v\d+)?)", re.I)
+_ARXIV_IN_URL = re.compile(r"arxiv\.org/(?:abs|pdf)/([0-9]{4}\.[0-9]{4,5}(?:v\d+)?)", re.I)
+
+
+def _textfold(path: str, payload: Optional[Dict[str, Any]] = None, timeout: float = 120) -> Tuple[Optional[Any], Optional[str]]:
+    url = f"{TEXTFOLD_BASE}{path}"
+    data = json.dumps(payload).encode("utf-8") if payload is not None else None
+    req = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return json.loads(resp.read().decode("utf-8", errors="replace")), None
+    except urllib.error.HTTPError as exc:
+        return None, f"TextFold 返回 {exc.code}"
+    except (urllib.error.URLError, OSError):
+        return None, "TextFold 不可达：确认 127.0.0.1:3017 在运行（Hermes 插件「阅读」页可一键启动）"
+    except json.JSONDecodeError:
+        return None, "TextFold 返回的不是 JSON"
+
+
+def _paper_ref(item: Dict[str, Any]) -> Tuple[Optional[str], Optional[str]]:
+    """条目 → (引用串, 类型)：优先 DOI，其次 extra 或 url 里的 arXiv 号。"""
+    inner = (item or {}).get("data") or {}
+    doi = str(inner.get("DOI") or "").strip()
+    if doi:
+        return "https://doi.org/" + doi, "doi"
+    found = _ARXIV_IN_EXTRA.search(str(inner.get("extra") or ""))
+    if found:
+        return found.group(1), "arxiv"
+    found = _ARXIV_IN_URL.search(str(inner.get("url") or ""))
+    if found:
+        return found.group(1), "arxiv"
+    return None, None
+
+
+def _no_redirect_open(url: str, timeout: float = 8):
+    """拿 Zotero 附件文件的 302 Location（file:// 本地路径），不跟随跳转。"""
+    class _NoRedirect(urllib.request.HTTPRedirectHandler):
+        def redirect_request(self, req, fp, code, msg, headers, newurl):
+            return None
+
+    opener = urllib.request.build_opener(_NoRedirect)
+    try:
+        with opener.open(urllib.request.Request(url), timeout=timeout) as resp:
+            return resp.headers.get("Location"), None
+    except urllib.error.HTTPError as exc:
+        if exc.code in (301, 302, 303, 307, 308):
+            return exc.headers.get("Location"), None
+        return None, f"Zotero 附件返回 {exc.code}"
+    except (urllib.error.URLError, OSError):
+        return None, "Zotero 不可达"
+
+
+def _zotero_pdf_path(key: str) -> Tuple[Optional[str], Optional[str]]:
+    """条目第一条 PDF 附件的本地路径（Zotero 的 file:// 302）。"""
+    kids, error = _zotero_get(f"items/{key}/children")
+    if error:
+        return None, error
+    for child in kids if isinstance(kids, list) else []:
+        inner = child.get("data") or {}
+        if inner.get("itemType") != "attachment":
+            continue
+        name = str(inner.get("filename") or "")
+        if not name.lower().endswith(".pdf"):
+            continue
+        location, err = _no_redirect_open(f"{ZOTERO_BASE}/items/{child.get('key')}/file")
+        if err or not location:
+            continue
+        path = urllib.parse.unquote(urllib.parse.urlparse(location).path)
+        if path.startswith("/") and re.match(r"^/[A-Za-z]:", path):
+            path = path[1:]          # /E:/… → E:/…
+        if os.path.isfile(path):
+            return path, None
+    return None, "这个条目没有本地 PDF 附件"
+
+
+def _textfold_pdf(raw: bytes, name: str, lang: str) -> Tuple[Optional[Any], Optional[str]]:
+    req = urllib.request.Request(
+        f"{TEXTFOLD_BASE}/api/files", data=raw,
+        headers={"Content-Type": "application/pdf",
+                 "X-Name": name.encode("utf-8").decode("latin-1", "ignore") or "paper.pdf",
+                 "X-Lang": lang})
+    try:
+        with urllib.request.urlopen(req, timeout=300) as resp:
+            return json.loads(resp.read().decode("utf-8", errors="replace")), None
+    except urllib.error.HTTPError as exc:
+        return None, f"TextFold 返回 {exc.code}"
+    except (urllib.error.URLError, OSError):
+        return None, "TextFold 不可达：确认 127.0.0.1:3017 在运行"
+
+
+def zotero_read(key: str, *, lang: str = "zh") -> Dict[str, Any]:
+    """把一条 Zotero 文献交给 TextFold 折读：先按 DOI/arXiv 取线上版，失败再用本地 PDF 附件。"""
+    if not _COLLECTION_KEY_RE.match((key or "").upper()):
+        raise paths.PathNotAllowed("Zotero key 形状非法")
+    key = key.upper()
+    data, error = _zotero_get(f"items/{key}")
+    if error:
+        return {"ok": False, "error": error}
+    inner = (data or {}).get("data") or {}
+    title = str(inner.get("title") or "").strip()
+
+    ref, kind = _paper_ref(data if isinstance(data, dict) else {})
+    online_error = None
+    if ref:
+        job, err = _textfold("/api/generate", {"paper": ref, "lang": lang})
+        if not err:
+            return {"ok": True, "via": kind, "ref": ref, "title": title, "lang": lang, **(job or {})}
+        online_error = err
+
+    path, path_error = _zotero_pdf_path(key)
+    if not path:
+        return {"ok": False,
+                "error": (f"线上取不到（{online_error}）；" if online_error else "") + (path_error or "没有 PDF 附件")}
+    raw = Path(path).read_bytes()
+    if len(raw) > 80 * 1024 * 1024:
+        return {"ok": False, "error": "PDF 超过 80 MB，未发送"}
+    res, err = _textfold_pdf(raw, os.path.basename(path), lang)
+    if err:
+        return {"ok": False, "error": err}
+    if isinstance(res, dict) and res.get("needs") == "engine":
+        return {"ok": False, "error": "TextFold 内置解析读不了这份 PDF（需要它的 PDF 引擎）"}
+    return {"ok": True, "via": "attachment", "file": os.path.basename(path), "title": title,
+            "lang": lang, **(res or {})}
+
+
+def textfold_job(job_id: str) -> Dict[str, Any]:
+    """转发 TextFold 的 job 状态，供前端轮询。"""
+    if not re.match(r"^[A-Za-z0-9]{4,40}$", job_id or ""):
+        raise paths.PathNotAllowed("job id 形状非法")
+    jobs, err = _textfold("/api/jobs", timeout=15)
+    if err:
+        return {"ok": False, "error": err}
+    for job in jobs if isinstance(jobs, list) else []:
+        if job.get("id") == job_id:
+            return {"ok": True, "job": job}
+    return {"ok": False, "error": "没有这个 job"}
