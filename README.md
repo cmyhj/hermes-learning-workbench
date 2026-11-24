@@ -25,7 +25,7 @@ Hermes Agent 的**学习区插件**（`wb-learn`）：课程 / 自主学习对�
 |---|---|---|---|---|
 | 项目 | [hermes-project-workbench](https://github.com/cmyhj/hermes-project-workbench) | **ProjectManager** | <https://github.com/AlicDanclic/ProjectManager> | `.pm` 项目数据模型（任务/里程碑/看板/甘特）、默认极简的页面组织；MIT |
 | 学习 | [hermes-learning-workbench](https://github.com/cmyhj/hermes-learning-workbench) | **Shiroha Quiz** | <https://github.com/reiqr/shiroha-quiz> | 题库数据形状、题型枚举、多选/判断/多空/简答的判分语义；GPL-3.0（未复制代码） |
-| 学习 | 同上 | **`/teach`（Hermes 教学技能）** | <https://hermes-agent.nousresearch.com/docs/guides/work-with-skills> | 课程工作区约定（`MISSION.md`/`RESOURCES.md`/`NOTES.md`/`lessons/`/`reference/`/`assets/`/`learning-records/`）与「子条目 `course/`」布局；调用方式：在对象对话里发 `/teach <主题>` |
+| 学习 | 同上 | **`/teach`（Matt Pocock 的 teach skill）** | <https://github.com/mattpocock/skills/tree/main/skills/productivity/teach> | 课程工作区约定（`MISSION.md`/`RESOURCES.md`/`lessons/`/`reference/`/`assets/`/`learning-records/`）、跨会话以文件为状态的教学；MIT；调用方式：在对象对话里发 `/teach <主题>` |
 | 游戏 | [hermes-game-workbench](https://github.com/cmyhj/hermes-game-workbench) | **AUTO-MAS** | <https://github.com/AUTO-MAS-Project/AUTO-MAS> | MCP 只读工具、历史记录字段与 `+04:00` 时间语义、脚本/账号配置结构；AGPL-3.0 |
 | 游戏 | 同上 | **March7thAssistant (M7A)** | <https://github.com/moesnow/March7thAssistant> | `installs.json` 注册表、`logs/runs/*.json` 与 `开拓力` 日志行形状；GPL-3.0 |
 | 游戏 | 同上 | **ZenlessZoneZero-OneDragon** | <https://github.com/OneDragon-Anything/ZenlessZoneZero-OneDragon> | 原生 `log.txt*` 完成/失败行与 `剩余电量` 读数形状；GPL-3.0 |
@@ -38,8 +38,12 @@ Hermes Agent 的**学习区插件**（`wb-learn`）：课程 / 自主学习对�
 
 ### 与 `/teach` 的调用配合
 
-`/teach` 是 Hermes 自带的教学技能（`$HERMES_HOME/skills/teach/`，Windows 默认
-`%LOCALAPPDATA%\hermes\skills\teach`；装好后自动成为斜杠命令）。
+`/teach` 来自 Matt Pocock 的开源技能集 **[mattpocock/skills](https://github.com/mattpocock/skills)**（MIT），
+技能目录：<https://github.com/mattpocock/skills/tree/main/skills/productivity/teach>。
+本机把它复制到 `$HERMES_HOME/skills/teach/`（Windows 默认 `%LOCALAPPDATA%\hermes\skills\teach`），
+装好后自动成为斜杠命令；本地副本在原始技能上补了一条 `wb-learn` 目录约定（见 `SKILL.md`
+的「Learning-Entry Directory Convention (wb-learn)」）。
+
 wb-learn **不复制它的实现**，只约定工作区形状，让教学产物直接成为学习材料：
 
 - 一个自主学习对象 = 一个教学单元。推荐布局 `<项目>/<子条目>/{code,course}`
@@ -57,7 +61,7 @@ wb-learn **不复制它的实现**，只约定工作区形状，让教学产物�
 /teach diffusion policy 的训练循环
 ```
 
-技能说明与斜杠命令机制：<https://hermes-agent.nousresearch.com/docs/guides/work-with-skills>
+上游说明：<https://github.com/mattpocock/skills/blob/main/docs/productivity/teach.md>
 
 ---
 
