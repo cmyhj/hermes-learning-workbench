@@ -96,7 +96,7 @@
             if (!res || !res.ok) { setReading(false); setOpenErr((res && res.error) || "TextFold折叠阅读失败"); return; }
             var job = res.job || {}, pid = res.paper || job.pid;
             var openReader = function () {
-              window.open((function(){var h=location.hostname;return (h==="127.0.0.1"||h==="localhost")?"http://127.0.0.1:3017":"http://"+h+":3018";})() + "/p/" + encodeURIComponent(pid) + "?lang=zh",
+              window.open((function(){var h=location.hostname;(h==="localhost"||h==="127.0.0.1"||h==="[::1]")&&(h="127.0.0.1");return "http://"+h+":3019";})() + "/p/" + encodeURIComponent(pid) + "?lang=zh",
                 "_blank", "noopener");
             };
             if (pid) { openReader(); setReading(false); }
