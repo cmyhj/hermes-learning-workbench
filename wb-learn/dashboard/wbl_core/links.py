@@ -471,7 +471,7 @@ def _textfold(path: str, payload: Optional[Dict[str, Any]] = None, timeout: floa
         return None, "TextFold 返回的不是 JSON"
 
 
-TEXTFOLD_PY = os.environ.get("WB_LEARN_TEXTFOLD_PY") or r"D:\DevTool	extfold-venv\Scripts\python.exe"
+TEXTFOLD_PY = os.environ.get("WB_LEARN_TEXTFOLD_PY") or "D:/DevTool/textfold-venv/Scripts/python.exe"
 TEXTFOLD_LOG = os.environ.get("WB_LEARN_TEXTFOLD_LOG") or r"D:\DevTool	extfold-serve.log"
 
 
